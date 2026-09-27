@@ -1,14 +1,14 @@
 """Điền kết quả evaluate_real.py vào template tổng hợp VAD; mọi chỉ số tính bằng CÔNG THỨC Excel.
 
 evaluate_real.py xuất số đếm thô (results_real/excel/): TP/FN/FP/TN theo ngưỡng × cấu hình × category × vùng bin,
-số đếm ROC, bảng nhãn 2×2, histogram, timeline. Script này:
+số đếm ROC, bảng nhãn 2×2, độ lệch biên. Script này:
   - ghi số đếm vào các sheet "DL ..." (chữ xanh = số nhập từ Python, không sửa tay)
   - sheet "KQ du lieu that": MR, FAR, F1, DCF, AUC, κ, chọn ngưỡng... là công thức; tham số ở ô vàng B6:B10
-    (trọng số DCF, cấu hình, tiêu chí chọn ngưỡng, mốc FPR) -> đổi là mọi bảng và biểu đồ tính lại
-  - sheet "Bieu do du lieu that": biểu đồ Excel đọc từ ô (không dùng ảnh)
+    (trọng số DCF, cấu hình, tiêu chí chọn ngưỡng, mốc FPR) -> đổi là mọi bảng tính lại
+  - sheet "Hinh du lieu that": 4 hình vẽ bằng Python (results_real/fig*.png của evaluate_real.py)
   - các sheet của template lấy số bằng công thức từ KQ du lieu that; chỉ ghi ô vàng/xám, không sửa công thức
     sẵn có; ô xám (ví dụ) đã thay bằng số thật đổi sang nền vàng
-Giữ là số từ Python (chữ xanh, có ghi chú): AUC chính xác, CI bootstrap, event-F1, Δbiên, lag, dự đoán trong timeline.
+Giữ là số từ Python (chữ xanh, có ghi chú): AUC chính xác, CI bootstrap, event-F1, Δbiên, lag.
 
     python make_excel_real.py   # results/Tong_hop_danh_gia_VAD_template.xlsx -> results/Tong_hop_danh_gia_VAD_baseline_real.xlsx
 """
@@ -17,11 +17,8 @@ from datetime import date
 from pathlib import Path
 import numpy as np, pandas as pd
 from openpyxl import load_workbook
-from openpyxl.chart import BarChart, Reference, ScatterChart, Series
-from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.comments import Comment
-from openpyxl.drawing.line import LineProperties
-from openpyxl.formatting.rule import ColorScaleRule
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter as L
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -39,8 +36,7 @@ R, XD = a.res, a.res / "excel"
 S = json.load(open(R / "summary.json", encoding="utf-8"))
 pf = pd.read_csv(R / "per_file.csv").sort_values(["category", "file"]).reset_index(drop=True)
 sw, roc, labc = pd.read_csv(XD / "sweep_counts.csv"), pd.read_csv(XD / "roc_counts.csv"), pd.read_csv(XD / "label_counts.csv")
-hist, dls, grid = pd.read_csv(XD / "score_hist.csv"), pd.read_csv(XD / "deltas.csv"), pd.read_csv(R / "grid_dev.csv")
-tls, tlb, shift = pd.read_csv(XD / "timeline_scores.csv"), pd.read_csv(XD / "timeline_bins.csv"), pd.read_csv(R / "shift_sweep.csv")
+dls, grid, shift = pd.read_csv(XD / "deltas.csv"), pd.read_csv(R / "grid_dev.csv"), pd.read_csv(R / "shift_sweep.csv")
 tA, cat, evt = pd.read_csv(R / "tierA.csv"), pd.read_csv(R / "category.csv"), pd.read_csv(R / "event_by_threshold.csv")
 sus, struct = pd.read_csv(R / "suspicious.csv"), pd.read_csv(R / "structure.csv")
 THR = S["thr_used"]; TODAY = date.today().strftime("%d/%m/%Y")
@@ -51,15 +47,13 @@ YEL, HDR = PatternFill("solid", fgColor="FFF2CC"), PatternFill("solid", fgColor=
 thin = Side(style="thin", color="BFBFBF"); BD = Border(left=thin, right=thin, top=thin, bottom=thin)
 FN_, FB_ = Font(name=F, size=10), Font(name=F, size=10, color=BLUE)          # công thức / số nhập từ Python
 CATS = ["Asm", "Babble", "Clean", "Music", "Noise"]
-COL = dict(zip(CATS, ["2A78D6", "EB6834", "1BAF7A", "EDA100", "E87BA4"]))   # thứ tự cố định, không xoay vòng
-C1, C2, C3, INK, MUTED = "2A78D6", "EB6834", "1BAF7A", "0B0B0B", "8A8984"
 P, D3 = "0.0%", "0.000"
 
 wb = load_workbook(a.template)
-NEW = ["KQ du lieu that", "Bieu do du lieu that", "DL quet nguong", "DL ROC", "DL theo file", "DL nhan va phan bo", "DL doan va timeline"]
-for n in NEW + ["Hinh du lieu that"]:
+NEW = ["KQ du lieu that", "Hinh du lieu that", "DL quet nguong", "DL ROC", "DL theo file", "DL nhan va phan bo", "DL do lech bien"]
+for n in NEW + ["Bieu do du lieu that", "DL doan va timeline"]:
     if n in wb.sheetnames: del wb[n]
-kq, bd, dq, dr, dfs, dn, dt = (wb.create_sheet(n) for n in NEW)
+kq, hd, dq, dr, dfs, dn, dt = (wb.create_sheet(n) for n in NEW)
 KQ, DQ, DR, DF, DN, DT = (f"'{s.title}'" for s in (kq, dq, dr, dfs, dn, dt))   # tên sheet có dấu cách -> để trong nháy
 
 
@@ -108,21 +102,19 @@ def dcf(mr, far): return f'=IF(OR({mr}="",{far}=""),"",{KQ}!$B$6*{mr}+(1-{KQ}!$B
 
 
 # ======================= DL theo file =======================
-title(dfs, "Số liệu theo file (144 file)", "Chữ xanh = số nhập từ evaluate_real.py (per_file.csv). Cột P–R là công thức. Sắp theo category để vẽ.")
+title(dfs, "Số liệu theo file (144 file)", "Chữ xanh = số nhập từ evaluate_real.py (per_file.csv). Cột P–Q là công thức.")
 fcols = [("file", "File", None), ("category", "Category", None), ("split", "Tập", None), ("dur_s", "Thời lượng (s)", "0.0"),
          ("speech_ratio", "% speech (chính sách)", P), ("speech_ratio_alt", "% speech (FireRedVAD gốc)", P),
          ("silero_ratio", "% speech (Silero)", P), ("agree_aed_silero", "Khớp FireRedVAD–Silero", P),
          ("transitions", "#chuyển trạng thái", None), ("n_speech_seg", "#đoạn speech", None), ("boundary_frac", "% bin biên", P),
          ("auc_file", "AUC file", D3), ("lag_s", "Lag (s)", "0.00"), ("peak_corr", "Tương quan đỉnh", D3), ("mean_score", "Điểm TB", D3)]
-head(dfs, 4, [c[1] for c in fcols] + ["1 lớp? (CT)", "Cực đoan? (CT)", "x vẽ (CT)"])
-DF0, DF1 = 5, 4 + len(pf); dfcat = {}
+head(dfs, 4, [c[1] for c in fcols] + ["1 lớp? (CT)", "Cực đoan? (CT)"])
+DF0, DF1 = 5, 4 + len(pf)
 for i, row in enumerate(pf.itertuples(index=False), DF0):
     for j, (k, _, fmt) in enumerate(fcols, 1): raw(dfs, i, j, getattr(row, k), fmt)
     raw(dfs, i, 16, f"=IF(OR(E{i}=0,E{i}=1),1,0)", blue=False); raw(dfs, i, 17, f"=IF(OR(E{i}<0.1,E{i}>0.9),1,0)", blue=False)
-    raw(dfs, i, 18, f'=MATCH(B{i},{{"Asm","Babble","Clean","Music","Noise"}},0)+(MOD(ROW()*0.618034,1)-0.5)*0.36', "0.00", blue=False)
-    dfcat[row.category] = (dfcat.get(row.category, (i, i))[0], i)
 dfs.column_dimensions["A"].width = 24
-for c in range(2, 19): dfs.column_dimensions[L(c)].width = 12
+for c in range(2, 18): dfs.column_dimensions[L(c)].width = 12
 dfs.freeze_panes = "B5"
 def DFc(col): return rg(DF, col, DF0, DF1)
 
@@ -156,11 +148,11 @@ def sif(col, config, thr, mask, cat=None):
 # ======================= DL ROC =======================
 RAWG = CATS + ["Dev"]; GROUPS = RAWG + ["Test", "Tất cả"]
 cc = {g: 2 + 4 * i for i, g in enumerate(GROUPS)}                     # cột TP của nhóm (TP, FP, FN, TN)
-mc = {g: 2 + 4 * len(GROUPS) + 5 * i for i, g in enumerate(GROUPS)}   # cột TPR của nhóm (TPR, FPR, Precision, DET x, DET y)
+mc = {g: 2 + 4 * len(GROUPS) + 3 * i for i, g in enumerate(GROUPS)}   # cột TPR của nhóm (TPR, FPR, Precision)
 title(dr, "Số đếm ROC trên điểm thô (tầng A)", f"{len(roc)} ngưỡng = phân vị điểm của 144 file + 2 ngưỡng chặn; speech khi điểm ≥ ngưỡng. "
       "Test theo category và Dev gộp là số từ Python (chữ xanh); nhóm Test, Tất cả và mọi tỉ lệ là công thức.")
 head(dr, 4, ["Ngưỡng"] + [f"{g} {k}" for g in GROUPS for k in ("TP", "FP", "FN", "TN")]
-     + [f"{g} {k}" for g in GROUPS for k in ("TPR", "FPR", "Precision", "DET x", "DET y")])
+     + [f"{g} {k}" for g in GROUPS for k in ("TPR", "FPR", "Precision")])
 DR0, DR1 = 5, 4 + len(roc)
 for i, row in enumerate(roc.itertuples(index=False), DR0):
     raw(dr, i, 1, row.thr, "0.00000")
@@ -170,15 +162,14 @@ for i, row in enumerate(roc.itertuples(index=False), DR0):
         raw(dr, i, cc["Test"] + k, "=" + "+".join(f"{L(cc[c] + k)}{i}" for c in CATS), blue=False)
         raw(dr, i, cc["Tất cả"] + k, f"={L(cc['Test'] + k)}{i}+{L(cc['Dev'] + k)}{i}", blue=False)
     for g in GROUPS:
-        tp, fp, fn, tn = (f"{L(cc[g] + k)}{i}" for k in range(4)); t_, f_ = L(mc[g]), L(mc[g] + 1)
-        for k, fml in enumerate([f"={tp}/({tp}+{fn})", f"={fp}/({fp}+{tn})", f"=IF({tp}+{fp}=0,1,{tp}/({tp}+{fp}))",
-                                 f"=NORMSINV(MIN(MAX({f_}{i},0.0001),0.9999))", f"=NORMSINV(MIN(MAX(1-{t_}{i},0.0001),0.9999))"]):
+        tp, fp, fn, tn = (f"{L(cc[g] + k)}{i}" for k in range(4))
+        for k, fml in enumerate([f"={tp}/({tp}+{fn})", f"={fp}/({fp}+{tn})", f"=IF({tp}+{fp}=0,1,{tp}/({tp}+{fp}))"]):
             raw(dr, i, mc[g] + k, fml, D3, blue=False)
 dr.column_dimensions["A"].width = 10; dr.freeze_panes = "B5"
 def rocc(g, k, r0=DR0, r1=DR1): return rg(DR, L(mc[g] + k), r0, r1)   # k: 0 TPR, 1 FPR, 2 Precision
 
 # ======================= DL nhan va phan bo =======================
-title(dn, "Nhãn, độ dịch thời gian, histogram, lưới hậu xử lý", "Chữ xanh = số từ Python; chữ đen = công thức.")
+title(dn, "Nhãn, độ dịch thời gian, lưới hậu xử lý", "Chữ xanh = số từ Python; chữ đen = công thức.")
 r = 4; sec(dn, r, "a. Bảng 2×2 FireRedVAD (quy tắc gốc) vs Silero, theo category × vùng bin (144 file)")
 head(dn, r + 1, ["Category", "Vùng bin", "n11 (cả hai speech)", "n10 (chỉ FireRedVAD)", "n01 (chỉ Silero)", "n00",
                  "#bin đổi do hát", "#bin nhãn chắc", "#bin speech (chính sách)"])
@@ -195,29 +186,7 @@ for i, row in enumerate(shift.itertuples(index=False), SH0):
         raw(dn, i, j, getattr(row, k), "0.00" if j == 1 else "0.0000")
     for j, src in zip((7, 8, 9), "DEF"):
         raw(dn, i, j, f"={src}{i}-INDEX(${src}${SH0}:${src}${SH1},MATCH(0,$A${SH0}:$A${SH1},0))", "0.0000", blue=False)
-r = SH1 + 2; sec(dn, r, "c. Histogram điểm theo lớp (144 file, 40 khoảng; mật độ có sàn 0.001 để vẽ trục log)")
-head(dn, r + 1, ["Từ", "Đến", "Giữa", "#bin non-speech", "#bin speech", "Mật độ non-speech", "Mật độ speech"])
-SC0 = r + 2; SC1 = SC0 + len(hist) - 1
-for i, row in enumerate(hist.itertuples(index=False), SC0):
-    raw(dn, i, 1, row.lo, D3); raw(dn, i, 2, row.hi, D3); raw(dn, i, 4, row.n_nonspeech); raw(dn, i, 5, row.n_speech)
-    raw(dn, i, 3, f"=(A{i}+B{i})/2", D3, blue=False)
-    for j, src in ((6, "D"), (7, "E")):
-        raw(dn, i, j, f"=MAX({src}{i}/SUM(${src}${SC0}:${src}${SC1})/(B{i}-A{i}),0.001)", D3, blue=False)
-r = SC1 + 2; sec(dn, r, "d. Histogram lag theo file (đếm từ DL theo file, cột Lag)")
-head(dn, r + 1, ["Từ (s)", "Đến (s)", "Tâm (s)", "#file"])
-lag_lo = np.round(np.arange(-1.55, 1.5, 0.1), 2); LG0 = r + 2; LG1 = LG0 + len(lag_lo) - 1
-for i, lo in enumerate(lag_lo, LG0):
-    raw(dn, i, 1, lo, "0.00", blue=False); raw(dn, i, 2, f"=A{i}+0.1", "0.00", blue=False); raw(dn, i, 3, f"=A{i}+0.05", "0.0", blue=False)
-    raw(dn, i, 4, f'=COUNTIFS({DFc("M")},">="&A{i},{DFc("M")},"<"&B{i})', blue=False)
-DL0, DL1 = 5, 4 + len(dls)
-r = LG1 + 2; sec(dn, r, "e. Histogram Δonset / Δoffset (test, ngưỡng Python; đếm từ DL doan va timeline)")
-head(dn, r + 1, ["Từ (s)", "Đến (s)", "Tâm (s)", "Δonset", "Δoffset"])
-dl_lo = np.arange(-3.25, 3.25, 0.5); DH0 = r + 2; DH1 = DH0 + len(dl_lo) - 1
-for i, lo in enumerate(dl_lo, DH0):
-    raw(dn, i, 1, lo, "0.00", blue=False); raw(dn, i, 2, f"=A{i}+0.5", "0.00", blue=False); raw(dn, i, 3, f"=A{i}+0.25", "0.00", blue=False)
-    for j, col in ((4, "A"), (5, "B")):
-        raw(dn, i, j, f'=COUNTIFS({rg(DT, col, DL0, DL1)},">="&$A{i},{rg(DT, col, DL0, DL1)},"<"&$B{i})', blue=False)
-r = DH1 + 2; sec(dn, r, "f. Lưới pad × merge trên dev (ngưỡng Python, A4 với pad/merge thay đổi)")
+r = SH1 + 2; sec(dn, r, "c. Lưới pad × merge trên dev (ngưỡng Python, A4 với pad/merge thay đổi)")
 head(dn, r + 1, ["Pad trước (ms)", "Pad sau (ms)", "Merge gap (ms)", "TP", "FN", "FP", "TN", "MR", "FAR", "F1", "DCF"])
 GR0 = r + 2; GR1 = GR0 + len(grid) - 1
 for i, row in enumerate(grid.itertuples(index=False), GR0):
@@ -227,32 +196,17 @@ for i, row in enumerate(grid.itertuples(index=False), GR0):
     raw(dn, i, 11, dcf(f"H{i}", f"I{i}"), D3, blue=False)
 for c in range(1, 12): dn.column_dimensions[L(c)].width = 13
 
-# ======================= DL doan va timeline =======================
-title(dt, "Độ lệch biên và timeline mẫu (Python, ngưỡng Python)", "A–B: Δ biên mỗi đoạn GT (test). D–F: điểm theo cửa sổ. "
-      "H–L: nhãn và dự đoán theo bin (dạng bậc thang để vẽ). N–P: đường ngưỡng đang chọn (công thức).")
-head(dt, 4, ["Δonset (s)", "Δoffset (s)"]); head(dt, 4, ["File", "t (s)", "Điểm"], 4)
-head(dt, 4, ["File", "t (s)", "GT", "Dự đoán A4", "Dự đoán (vẽ)"], 8); head(dt, 4, ["File", "x (s)", "Ngưỡng đang chọn"], 14)
+# ======================= DL do lech bien =======================
+title(dt, "Độ lệch biên mỗi đoạn GT (test, A4, ngưỡng Python)", "Chữ xanh = số từ Python (dự đoán − GT, giây).")
+head(dt, 4, ["Δonset (s)", "Δoffset (s)"])
+DL0, DL1 = 5, 4 + len(dls)
 for i, row in enumerate(dls.itertuples(index=False), DL0): raw(dt, i, 1, row.d_onset, "0.00"); raw(dt, i, 2, row.d_offset, "0.00")
-TS, TB, TH = {}, {}, {}
-for i, row in enumerate(tls.itertuples(index=False), 5):
-    raw(dt, i, 4, row.file); raw(dt, i, 5, row.center, "0.00"); raw(dt, i, 6, row.score, D3)
-    TS[row.file] = (TS.get(row.file, (i, i))[0], i)
-for i, row in enumerate(tlb.itertuples(index=False), 5):
-    raw(dt, i, 8, row.file); raw(dt, i, 9, row.t, "0.0"); raw(dt, i, 10, row.GT); raw(dt, i, 11, row.pred)
-    raw(dt, i, 12, f"=-0.12*K{i}", "0.00", blue=False)
-    TB[row.file] = (TB.get(row.file, (i, i))[0], i)
-i = 5
-for fname, (b0, b1) in TB.items():          # mỗi file 2 điểm: x = 0 và x = cuối file, y = ngưỡng đang chọn
-    for k, x in enumerate(("=0", f"=MAX(I{b0}:I{b1})")):
-        raw(dt, i + k, 14, fname); raw(dt, i + k, 15, x, "0.0", blue=False); raw(dt, i + k, 16, f"={KQ}!$B$11", "0.00", blue=False)
-    TH[fname] = (i, i + 1); i += 2
-for c in "ABEFIJKLOP": dt.column_dimensions[c].width = 10
-for c in "DHN": dt.column_dimensions[c].width = 22
+for c in "AB": dt.column_dimensions[c].width = 12
 
 # ======================= KQ du lieu that =======================
 title(kq, "Kết quả trên audio thật – chỉ số tính bằng công thức", SRC)
 kq["A3"] = ("Nền vàng = tham số bạn chỉnh (B6:B10) · chữ đen = công thức · chữ xanh = số nhập từ Python (bootstrap, event, "
-            "AUC chính xác…; không tính lại trong Excel). Đổi tham số thì mọi bảng, biểu đồ và sheet template liên kết tự tính lại.")
+            "AUC chính xác…; không tính lại trong Excel). Đổi tham số thì mọi bảng và sheet template liên kết tự tính lại; hình vẽ bằng Python thì không.")
 kq["A3"].font = Font(name=F, size=9, italic=True, color="595959")
 kq.column_dimensions["A"].width = 46
 for c in range(2, 26): kq.column_dimensions[L(c)].width = 12
@@ -266,9 +220,9 @@ for ref, opts in (("B7", '"A0,A1,A2,A3,A4"'), ("B8", '"DCF-min,F1-max"')):
     dv = DataValidation(type="list", formula1=opts, allow_blank=False); kq.add_data_validation(dv); dv.add(ref)
 w(kq, 11, 1, "Ngưỡng dùng (tự chọn trên dev theo B7, B8)", left=True, bold=True)
 w(kq, 11, 2, "=INDEX($I$17:$I$21,MATCH($B$7,$A$17:$A$21,0))", "0.00", bold=True)
-w(kq, 12, 1, "Ngưỡng Python đã dùng cho số theo đoạn, CI, Δbiên, timeline", left=True); w(kq, 12, 2, THR, "0.00", blue=True)
+w(kq, 12, 1, "Ngưỡng Python đã dùng cho số theo đoạn, CI, Δbiên, hình", left=True); w(kq, 12, 2, THR, "0.00", blue=True)
 w(kq, 13, 1, "Kiểm tra", left=True)
-w(kq, 13, 2, '=IF(AND(ABS(B11-B12)<0.0000001,B7="A4"),"Khớp","KHÁC: số theo đoạn, CI, Δbiên, dự đoán timeline vẫn ở ngưỡng Python / A4")', left=True)
+w(kq, 13, 2, '=IF(AND(ABS(B11-B12)<0.0000001,B7="A4"),"Khớp","KHÁC: số theo đoạn, CI, Δbiên, hình vẫn ở ngưỡng Python / A4")', left=True)
 
 # A. chọn ngưỡng
 sec(kq, 15, "A. Chọn ngưỡng trên dev thật / val tổng hợp (qua toàn pipeline; DCF theo trọng số B6)")
@@ -431,118 +385,15 @@ for r_, row in enumerate(sus.head(30).itertuples(index=False), 110):
     for k, (col, _, fmt) in enumerate(scol, 1): w(kq, r_, k, getattr(row, col), fmt, blue=True, left=k == 1)
 kq.freeze_panes = "B5"
 
-# ======================= Bieu do du lieu that =======================
-title(bd, "Biểu đồ – đánh giá trên audio thật (biểu đồ Excel, đọc trực tiếp từ ô)",
-      "Đổi tham số ở KQ du lieu that!B6:B10 thì biểu đồ tự cập nhật. Timeline: điểm và nhãn cố định; đường ngưỡng theo ngưỡng "
-      "đang chọn; dự đoán ở ngưỡng Python.")
-
-def gp(color=None, width=None, dash=None, noline=False, fill=None):
-    g = GraphicalProperties(); g.line = LineProperties()
-    if fill: g.solidFill = fill
-    if noline: g.line.noFill = True
-    else:
-        if color: g.line.solidFill = color
-        if width: g.line.width = int(width * 12700)
-        if dash: g.line.prstDash = dash
-    return g
-
-def scat(t, xt, yt, xr=None, yr=None, logy=False, xfmt=None, yfmt=None):
-    ch = ScatterChart(); ch.title, ch.style, ch.scatterStyle = t, 2, "lineMarker"
-    ch.width, ch.height = 16.5, 8.5; ch.x_axis.title, ch.y_axis.title = xt, yt; ch.legend.position = "b"
-    ch.x_axis.delete = ch.y_axis.delete = False
-    if xr: ch.x_axis.scaling.min, ch.x_axis.scaling.max = xr
-    if yr: ch.y_axis.scaling.min, ch.y_axis.scaling.max = yr
-    if logy: ch.y_axis.scaling.logBase = 10
-    if xfmt: ch.x_axis.number_format = xfmt
-    if yfmt: ch.y_axis.number_format = yfmt
-    return ch
-
-def xy(ch, ws, xc, yc, r0, r1, name, color, width=2.0, marker=False, dash=None):
-    s = Series(Reference(ws, min_col=yc, min_row=r0, max_row=r1), Reference(ws, min_col=xc, min_row=r0, max_row=r1), title=name)
-    s.graphicalProperties = gp(color, width, dash, noline=marker)
-    if marker:
-        s.marker.symbol, s.marker.size = "circle", 5
-        s.marker.graphicalProperties = gp("FFFFFF", 0.5, fill=color)
-    else:
-        s.marker.symbol = "none"
-    s.smooth = False; ch.series.append(s)
-
-def bars(t, cat_ws, cat_col, r0, r1, series, stacked=False, yt=None, yfmt=None, xt=None):
-    ch = BarChart(); ch.type, ch.title, ch.style = "col", t, 2; ch.width, ch.height = 16.5, 8.5; ch.legend.position = "b"
-    ch.x_axis.delete = ch.y_axis.delete = False; ch.gapWidth = 60
-    if stacked: ch.grouping, ch.overlap = "stacked", 100
-    for ws, col, color in series:      # ô ngay trên r0 là tên series
-        ch.add_data(Reference(ws, min_col=col, min_row=r0 - 1, max_row=r1), titles_from_data=True)
-        ch.series[-1].graphicalProperties = gp("FFFFFF", 1.5, fill=color)
-    ch.set_categories(Reference(cat_ws, min_col=cat_col, min_row=r0, max_row=r1))
-    if yt: ch.y_axis.title = yt
-    if xt: ch.x_axis.title = xt
-    if yfmt: ch.y_axis.number_format = yfmt
-    return ch
-
-# ô phụ cho biểu đồ (cột AA–AC): đường chéo ROC, đường ngưỡng dọc
-bd["AA3"] = "Ô phụ cho biểu đồ (đường chéo ROC, đường ngưỡng)"; bd["AA4"], bd["AB4"] = "x", "y"
-for r_, (x, y) in enumerate([(0, 0), (1, 1)], 5): bd.cell(r_, 27, x); bd.cell(r_, 28, y)
-bd["AA7"], bd["AB7"], bd["AA8"], bd["AB8"] = f"={KQ}!$B$11", 0, f"={KQ}!$B$11", 1
-
-slots = [f"{c}{4 + 18 * k}" for k in range(12) for c in ("A", "L")]; si = iter(slots)
-cat_axis = "Category: 1 Asm · 2 Babble · 3 Clean · 4 Music · 5 Noise"
-ch = scat("1a. Tỉ lệ speech mỗi file", cat_axis, "Tỉ lệ speech", (0.5, 5.5), (0, 1), yfmt="0%")
-for c in CATS: xy(ch, dfs, 18, 5, *dfcat[c], c, COL[c], marker=True)
-bd.add_chart(ch, next(si))
-ch = scat("1d. AUC từng file (file 1 lớp bỏ trống)", cat_axis, "AUC", (0.5, 5.5), (0.3, 1))
-for c in CATS: xy(ch, dfs, 18, 12, *dfcat[c], c, COL[c], marker=True)
-bd.add_chart(ch, next(si))
-ch = scat("5e. ΔAUC theo độ dịch điểm", "Shift (s)", "AUC − AUC(shift 0)", (-1, 1))
-for col, name, color in ((9, "Val tổng hợp (nhãn chính xác)", C1), (7, "Thật – FireRedVAD", C2), (8, "Thật – Silero", C3)):
-    xy(ch, dn, 1, col, SH0, SH1, name, color)
-bd.add_chart(ch, next(si))
-bd.add_chart(bars("5e. Lag từng file", dn, 3, LG0, LG1, [(dn, 4, C1)], yt="#file", xt="Lag (s)"), next(si))
-ch = scat("4a. Phân bố điểm theo lớp (trục log)", "Điểm", "Mật độ", (0, 1), logy=True)
-xy(ch, dn, 3, 6, SC0, SC1, "Non-speech", C1); xy(ch, dn, 3, 7, SC0, SC1, "Speech", C2)
-bd.add_chart(ch, next(si))
-bd.add_chart(bars("3. Nhất quán nhãn FireRedVAD – Silero", kq, 1, 72, 76, [(kq, 10, C1), (kq, 11, C2)], yfmt="0.00"), next(si))
-ch = scat("Tầng A – ROC (test)", "FPR", "TPR", (0, 1), (0, 1))
-for c in CATS: xy(ch, dr, mc[c] + 1, mc[c], DR0, DR1, c, COL[c])
-xy(ch, bd, 27, 28, 5, 6, "Ngẫu nhiên", MUTED, 1.0, dash="dash")
-bd.add_chart(ch, next(si))
-ch = scat("Tầng A – Precision–Recall (test)", "Recall", "Precision", (0, 1), (0, 1))
-for c in CATS: xy(ch, dr, mc[c], mc[c] + 2, DR0, DR1, c, COL[c])
-bd.add_chart(ch, next(si))
-ch = scat("Tầng A – DET (trục z: −2.33 = 1%, −1.64 = 5%, −0.84 = 20%, 0 = 50%)", "z(FAR)", "z(Miss rate)", (-3.2, 2), (-3.2, 2))
-for c in CATS: xy(ch, dr, mc[c] + 3, mc[c] + 4, DR0, DR1, c, COL[c])
-bd.add_chart(ch, next(si))
-ch = scat("MR / FAR theo ngưỡng (A4); đường dọc = ngưỡng đang chọn", "Ngưỡng", "Tỉ lệ", (0, 1), (0, 1), yfmt="0%")
-for tap, lab, dash in (("dev", "dev thật", None), ("synth", "val tổng hợp", "dash")):
-    b0, b1 = blocks[(tap, "A4")]
-    xy(ch, dq, 5, 14, b0, b1, f"MR {lab}", C2, dash=dash); xy(ch, dq, 5, 15, b0, b1, f"FAR {lab}", C1, dash=dash)
-xy(ch, bd, 27, 28, 7, 8, "Ngưỡng đang chọn", INK, 1.0)
-bd.add_chart(ch, next(si))
-bd.add_chart(bars("Loại lỗi theo category (test)", kq, 1, 32, 36, [(kq, 22, C1), (kq, 23, C2)], stacked=True, yt="#bin"), next(si))
-bd.add_chart(bars("F1 theo category (test)", kq, 1, 32, 36, [(kq, 19, C1), (kq, 20, C2)], yfmt="0.00"), next(si))
-bd.add_chart(bars("Độ lệch biên đoạn (dự đoán − GT), test, ngưỡng Python", dn, 3, DH0, DH1, [(dn, 4, C1), (dn, 5, C2)],
-                  yt="#đoạn", xt="giây"), next(si))
-# heatmap DCF (pad trước × merge gap, min theo pad sau) = bảng công thức + color scale
-anchor = next(si); hr = int(anchor[1:]); hc = 1 if anchor[0] == "A" else 12
-bd.cell(hr, hc, "DCF (dev) theo pad trước × merge gap – min theo pad sau; màu đậm = tốt").font = Font(name=F, size=11, bold=True, color=NAVY)
-gaps, pres = sorted(grid.gap_ms.unique()), sorted(grid.pre_ms.unique())
-head(bd, hr + 1, ["Pad trước \\ gap (ms)"] + [int(g_) for g_ in gaps], c0=hc)
-for i, pre in enumerate(pres, hr + 2):
-    w(bd, i, hc, int(pre))
-    for j in range(len(gaps)):
-        gcell = f"{L(hc + 1 + j)}${hr + 1}"
-        w(bd, i, hc + 1 + j, f"=_xlfn.MINIFS({rg(DN, 'K', GR0, GR1)},{rg(DN, 'A', GR0, GR1)},${L(hc)}{i},{rg(DN, 'C', GR0, GR1)},{gcell})", D3)
-hm = f"{L(hc + 1)}{hr + 2}:{L(hc + len(gaps))}{hr + 1 + len(pres)}"
-bd.conditional_formatting.add(hm, ColorScaleRule(start_type="min", start_color="6DA7EC", end_type="max", end_color="FFFFFF"))
-bd.column_dimensions[L(hc)].width = 18
-for f_ in TB:                                                   # timeline mẫu
-    b0, b1 = TB[f_]; s0, s1 = TS[f_]; h0, h1 = TH[f_]
-    ch = scat(f"Timeline {f_}", "giây", "", yr=(-0.15, 1.05)); ch.x_axis.scaling.min = 0
-    xy(ch, dt, 9, 10, b0, b1, "GT speech", "86B6EF", 1.5)
-    xy(ch, dt, 5, 6, s0, s1, "Điểm (tâm cửa sổ)", C1, 0.75)
-    xy(ch, dt, 9, 12, b0, b1, "Dự đoán A4 (ngưỡng Python)", INK, 1.5)
-    xy(ch, dt, 15, 16, h0, h1, "Ngưỡng đang chọn", MUTED, 1.0, dash="dash")
-    bd.add_chart(ch, next(si))
+# ======================= Hinh du lieu that (vẽ bằng Python) =======================
+title(hd, "Hình – đánh giá trên audio thật (vẽ bằng Python)",
+      f"{SRC} Hình cố định ở ngưỡng Python {THR} (A4); đổi tham số ở KQ du lieu that không đổi hình – chạy lại evaluate_real.py.")
+r = 4
+for f, t in [("fig1_kiem_tra_du_lieu.png", "Hình 1. Kiểm tra dữ liệu"), ("fig2_tang_A.png", "Hình 2. Tầng A (test)"),
+             ("fig3_tang_B.png", "Hình 3. Ngưỡng và tầng B"), ("fig4_timeline.png", "Hình 4. Timeline mẫu (test)")]:
+    sec(hd, r, t)
+    img = XLImage(str(R / f)); k = 1100 / img.width; img.width, img.height = 1100, int(img.height * k)
+    hd.add_image(img, f"A{r + 1}"); r += int(img.height / 20) + 4
 
 # ======================= các sheet của template =======================
 def put(ws, ref, v, fmt=None, text=None, yellow=False):
@@ -619,7 +470,7 @@ checks = {
  "1c": (f'="Trung vị "&FIXED({KQ}!$B$87,1)&" lần chuyển trạng thái / file"', f'=IF({KQ}!$B$87<=1,"Không đạt","Đạt")', "File dài 20–120 s"),
  "1d": (f'="AUC gộp "&FIXED({KQ}!$B$88,3)&" vs macro theo file "&FIXED({KQ}!$B$89,3)&"; "&{KQ}!$B$92&" file < 0.9, tệ nhất "'
         f'&FIXED({KQ}!$B$94,3)&" ("&{KQ}!$B$95&")"', f'=IF(OR(ABS({KQ}!$B$91)>0.005,{KQ}!$B$92>0),"Không đạt","Đạt")',
-        "File tệ tập trung ở Asm, Babble (xem biểu đồ 1d, timeline)."),
+        "File tệ tập trung ở Asm, Babble (Hinh du lieu that, hình 1 và 4)."),
  "2a": ("Không có metadata kênh / người nói; dev/test chia theo file, phân tầng category", "Chưa làm", None),
  "2b": (None, "Chưa làm", None),
  "2c": ("Model chỉ train trên dữ liệu tổng hợp (bộ dữ liệu công khai); audio thật chưa dùng để train", "Không áp dụng", None),
@@ -646,15 +497,15 @@ steps = {5: ("Đạt", "Dev 43 / test 101 file, chia theo file, phân tầng cat
          8: ("Đạt", "KQ du lieu that mục F: AUC, PR-AUC, TPR@FPR bằng công thức; tất cả / không biên / nhãn chắc. Chưa vẽ reliability diagram."),
          9: ("Đang làm", "KQ du lieu that mục A, E: ngưỡng chọn bằng công thức theo tiêu chí ở B8. Cần chốt tiêu chí (DCF hay FAR cố định)."),
          10: ("Đạt", "KQ du lieu that mục B, C, I: MR/FAR/F1/DCF 3 chế độ, FEC/MSC/OVER/NDS, event-F1, Δbiên. Chưa tính DetER."),
-         11: ("Đạt", "KQ du lieu that mục D + heatmap DCF (Bieu do du lieu that): hậu xử lý ít tác động."),
+         11: ("Đạt", "KQ du lieu that mục D + heatmap DCF (Hinh du lieu that, hình 3): hậu xử lý ít tác động."),
          12: ("Đang làm", "Có CI + per-category + số tổng hợp và số thật. Chưa nghe kiểm tra top-K (mục J).")}
 for r_, (g, h) in steps.items(): put(ws, f"G{r_}", g); put(ws, f"H{r_}", h)
 
 # Ke hoach baseline: bằng chứng nhóm Q
 ws = wb["Ke hoach baseline"]
-ev = {8: "DL theo file (cột Tập)", 9: "DL theo file, DL nhan va phan bo", 10: "KQ du lieu that mục H; DL nhan va phan bo mục b; biểu đồ 5e",
+ev = {8: "DL theo file (cột Tập)", 9: "DL theo file, DL nhan va phan bo", 10: "KQ du lieu that mục H; DL nhan va phan bo mục b; Hinh du lieu that, hình 1",
       11: "KQ du lieu that mục F; DL ROC", 12: "KQ du lieu that mục A, E; DL quet nguong", 13: "KQ du lieu that mục B, C, I",
-      14: "KQ du lieu that mục D; heatmap ở Bieu do du lieu that", 15: "KQ du lieu that; Bieu do du lieu that; results_real/"}
+      14: "KQ du lieu that mục D; DL nhan va phan bo mục c; hình 3", 15: "KQ du lieu that; Hinh du lieu that; results_real/"}
 for r_, t in ev.items(): put(ws, f"O{r_}", t)
 
 # Snapshot (cột Baseline)
@@ -674,11 +525,10 @@ note(ws["C24"], f"Công thức = KQ du lieu that!B11 (tiêu chí ở B8, trọng
 
 # Bieu do can ve
 ws = wb["Bieu do can ve"]
-drawn = {5: "ROC, Precision–Recall", 6: "DET (trục z)", 8: "MR/FAR theo ngưỡng, chỉ sau hậu xử lý A4, dev thật vs val tổng hợp",
-         9: "Loại lỗi theo category", 10: "Độ lệch biên đoạn", 11: "Heatmap DCF (không phải F1), bảng tô màu",
-         13: "Chấm theo category thay histogram + boxplot", 15: "Phân bố điểm theo lớp (chưa có F1 theo ngưỡng)",
-         16: "ΔAUC theo shift + histogram lag", 17: "6 timeline mẫu"}
-for r_, t in drawn.items(): put(ws, f"E{r_}", "Rồi", text=f"Bieu do du lieu that – {t}")
+drawn = {5: "hình 2", 6: "hình 2", 8: "hình 3 – chỉ sau hậu xử lý A4, dev thật vs val tổng hợp", 9: "hình 3", 10: "hình 3",
+         11: "hình 3 – heatmap DCF (không phải F1)", 13: "hình 1 – chấm theo category thay histogram + boxplot",
+         15: "hình 1 – chưa có F1 theo ngưỡng", 16: "hình 1 – ΔAUC theo shift + histogram lag", 17: "hình 4"}
+for r_, t in drawn.items(): put(ws, f"E{r_}", "Rồi", text=f"Hinh du lieu that – {t}")
 
 # Tong quan: nguồn số liệu
 ws = wb["Tong quan"]
@@ -690,7 +540,7 @@ info = [("Model", f"{a.run.as_posix()}/best – YAMNet đóng băng + head 1024�
         ("Loại số liệu", "Python reference – CHƯA phải output lib.so; Parity, hiệu năng, robustness chưa đo"),
         ("Cách đọc", "Chỉ số đo mức khớp với FireRedVAD, không phải độ chính xác tuyệt đối"),
         ("Ngưỡng dùng", f'=FIXED({KQ}!$B$11,2)&" ("&{KQ}!$B$8&" trên dev thật, "&{KQ}!$B$7&") – chỉnh ở KQ du lieu that, mục Tham số"'),
-        ("Sheet thêm", "KQ du lieu that (chỉ số = công thức), Bieu do du lieu that (biểu đồ Excel), DL … (số đếm thô từ Python, chữ xanh)")]
+        ("Sheet thêm", "KQ du lieu that (chỉ số = công thức), Hinh du lieu that (hình vẽ bằng Python), DL … (số đếm thô từ Python, chữ xanh)")]
 for i, (k, v) in enumerate(info, 1):
     ws.cell(r0 + i, 1, k).font = Font(name=F, size=11, bold=True)
     c = ws.cell(r0 + i, 2, v); c.font = Font(name=F, size=11); c.alignment = Alignment(wrap_text=True, vertical="top")

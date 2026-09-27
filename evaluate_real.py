@@ -449,9 +449,6 @@ for c in CATS:
                              n01=int(((A_ == 0) & (B_ == 1)).sum()), n00=int(((A_ == 0) & (B_ == 0)).sum()),
                              bin_doi_do_hat=int((y_[sel] != A_).sum()), n_nhan_chac=int(ok[sel].sum()), n_speech_policy=int(y_[sel].sum())))
 pd.DataFrame(lab_rows).to_csv(XL / "label_counts.csv", index=False)
-edges = np.linspace(0, 1, 41)
-pd.DataFrame(dict(lo=edges[:-1], hi=edges[1:], n_nonspeech=np.histogram(S_all[Y_all == 0], edges)[0],
-                  n_speech=np.histogram(S_all[Y_all == 1], edges)[0])).to_csv(XL / "score_hist.csv", index=False)
 pd.DataFrame(deltas, columns=["d_onset", "d_offset"]).to_csv(XL / "deltas.csv", index=False)
 
 # =============== Lưu ===============
@@ -540,10 +537,6 @@ show = [pt.sort_values("auc_file").file.iloc[0]]
 for c in CATS:
     g = pt[(pt.category == c) & ~pt.file.isin(show)]
     if len(g): show.append(g.iloc[(g.auc_file - g.auc_file.median()).abs().argsort()].file.iloc[0])
-pd.concat([recs[f]["m"][["center", "score"]].assign(file=f) for f in show])[["file", "center", "score"]].to_csv(
-    XL / "timeline_scores.csv", index=False)
-pd.DataFrame([dict(file=f, t=t, GT=int(recs[f]["y"][k]), pred=int(p_[k])) for f in show for p_ in [pred_cached(recs[f], THR)]
-              for k in range(recs[f]["n"]) for t in (k * BIN, (k + 1) * BIN)]).to_csv(XL / "timeline_bins.csv", index=False)
 fig, axs = plt.subplots(len(show), 1, figsize=(14, 1.9 * len(show)))
 for a_, f in zip(axs, show):
     d = recs[f]; y = d["y"]; p = pred_cached(d, THR); tt = np.arange(d["n"] + 1) * BIN

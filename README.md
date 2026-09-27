@@ -22,8 +22,9 @@ Audio thật (data/audio, output model ở C:/vad_work/run1/raw_real):
   results_real/excel/, ghi ra Tong_hop_danh_gia_VAD_baseline_real.xlsx:
   - sheet DL …: số đếm thô từ Python (chữ xanh) – TP/FN/FP/TN theo ngưỡng × cấu hình × category, ROC, nhãn 2×2…
   - KQ du lieu that: MR, FAR, F1, DCF, AUC, κ, chọn ngưỡng đều là công thức; ô vàng B6:B10 là tham số
-    (trọng số DCF, cấu hình, tiêu chí chọn ngưỡng, mốc FPR), đổi là mọi bảng và biểu đồ tính lại
-  - Bieu do du lieu that: 19 biểu đồ Excel đọc từ ô (không có ảnh)
+    (trọng số DCF, cấu hình, tiêu chí chọn ngưỡng, mốc FPR), đổi là mọi bảng tính lại
+  - Hinh du lieu that: 4 hình vẽ bằng Python (results_real/fig*.png) ở ngưỡng Python; đổi tham số trong
+    Excel không đổi hình – chạy lại evaluate_real.py
   - các sheet template (Bao cao category, Ablation, KPI va Gate, Snapshot, Kiem tra du lieu…) liên kết
     bằng công thức tới KQ du lieu that; chỉ ghi ô vàng/xám, giữ nguyên công thức của template
   Số chỉ Python tính được (CI bootstrap, event-F1, Δbiên, AUC chính xác) giữ là số, chữ xanh, có ghi chú.
