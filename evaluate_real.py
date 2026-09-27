@@ -1,12 +1,14 @@
 """Đánh giá output model VAD trên một bộ audio có nhãn, theo quy trình của evaluate.py.
 
-Dùng cho dữ liệu thật hoặc bộ dữ liệu mới bất kỳ có cấu trúc:
-    <root>/Model/<Cat>_<id>.txt       output model, mỗi cửa sổ 0.96 s một dòng: 'idx, start, end, score'
-                                      hoặc 'start end score' (start = đầu cửa sổ); được phép có thư mục con
-    <root>/.../audio/<Cat>/<Cat>_<id>.wav                              audio (wav/flac/mp3...; tuỳ chọn)
-    <root>/.../Ground_truth/<Cat>/groundtruth/Gt_<cat>_<id>.txt       nhãn (hoặc <Cat>/<Cat>_<id>.txt)
-                                      mỗi dòng 'start end speech|non-speech', theo bin 0.5 s hoặc theo thời điểm
-Category = phần trước dấu '_' đầu tiên của tên file.
+Dùng cho dữ liệu thật hoặc bộ dữ liệu mới bất kỳ có cấu trúc (tên file bất kỳ):
+    <root>/Model/[<quality>/]<tên>.txt     output model, mỗi cửa sổ 0.96 s một dòng: 'idx, start, end, score'
+                                           hoặc 'start end score' (start = đầu cửa sổ)
+    <root>/.../audio/[<category>/]<tên>.wav                          audio (wav/flac/mp3...; tuỳ chọn)
+    <root>/.../Ground_truth|GT/[<category>/][ground_truth/][Gt_]<tên>.txt     nhãn
+                                           mỗi dòng 'start end speech|non-speech', theo bin 0.5 s hoặc theo thời điểm
+Ghép theo <tên>: không phân biệt hoa thường, bỏ tiền tố / hậu tố nhãn (Gt_, label_, _gt...), vd Gt_asm_x <-> Asm_x.
+Nhóm (cột category: chia dev/test, báo cáo) theo --group; auto = thư mục <quality> của model > thư mục <category>
+của audio / nhãn > phần trước dấu '_' đầu tiên > một nhóm. Nhóm < 2 file gộp vào "Khác".
 
 Tuỳ chọn (có thì dùng, không có thì bỏ qua):
   --label2        nhãn của người gán thứ 2 (cùng định dạng) -> đồng thuận nhãn, bin "nhãn chắc"
@@ -46,6 +48,9 @@ ap.add_argument("--gt-alt", type=Path, help="nhãn theo quy tắc khác (tuỳ c
 ap.add_argument("--label2", type=Path, help="nhãn người gán thứ 2 (tuỳ chọn)")
 ap.add_argument("--silero-cache", "--cache", dest="silero_cache", type=Path, help="cache auto_label.py (tuỳ chọn)")
 ap.add_argument("--synth-gt", type=Path, default=Path("C:/vad_work/synth/clips/gt/val"), help="nhãn của syn_val_* (tuỳ chọn)")
+ap.add_argument("--group", choices=["auto", "quality", "category", "prefix", "none"], default="auto",
+                help="nhóm chính: quality = thư mục con của model, category = thư mục con của audio / nhãn, "
+                     "prefix = phần trước '_', none = một nhóm; auto = cái đầu tiên mọi file đều có (mặc định %(default)s)")
 ap.add_argument("--mo-ta-nhan", help="mô tả nhãn chính cho báo cáo")
 ap.add_argument("--mo-ta-model", help="mô tả model cho báo cáo")
 ap.add_argument("--dev-frac", type=float, default=0.3, help="tỉ lệ file vào dev (chọn ngưỡng), còn lại là test")
@@ -85,10 +90,10 @@ PARAMS = dict(overlap=A.overlap, smooth=A.smooth, pad_pre=A.pad_pre, pad_post=A.
               criterion=A.criterion, dcf_miss=A.dcf_miss, thr_min=A.thr_min, thr_max=A.thr_max, thr_step=A.thr_step,
               grid_pre=A.grid_pre, grid_post=A.grid_post, grid_gap=A.grid_gap, seed=A.seed, n_boot=A.n_boot, dev_frac=A.dev_frac)
 
+def norm_name(s): return re.sub(r"[_\-\s]", "", s.lower())
 def find_dir(root, names):
     """Thư mục nông nhất dưới root có tên thuộc names (không phân biệt hoa thường, bỏ '_', '-', dấu cách)."""
-    norm_ = lambda s: re.sub(r"[_\-\s]", "", s.lower())
-    hits = [p for p in [root, *root.rglob("*")] if p.is_dir() and norm_(p.name) in names]
+    hits = [p for p in [root, *root.rglob("*")] if p.is_dir() and norm_name(p.name) in names]
     return min(hits, key=lambda p: len(p.parts)) if hits else None
 if A.root:
     A.raw = A.raw or find_dir(A.root, {"model", "models", "raw"})
@@ -127,17 +132,27 @@ def bin_scores(m, n_bins, shift=0.0):
     return np.interp(np.arange(n_bins), has, out[has]) if len(has) else np.zeros(n_bins)
 
 # ---- I/O ----
-def index_gt(root):
-    """<Cat>_<id> -> file nhãn. Nhận <Cat>/<Cat>_<id>.txt, <Cat>/groundtruth/Gt_<cat>_<id>.txt và thư mục phẳng."""
-    out = {}
-    if root is None: return out
-    for p in Path(root).rglob("*.txt"):
-        if p.stem.lower().startswith("gt_"):
-            cat = p.parent.parent.name if p.parent.name.lower() == "groundtruth" else p.parent.name
-            out[f"{cat}_{p.stem.split('_', 2)[2]}"] = p
-        else:
-            out[p.stem] = p
-    return out
+LABEL_DIRS = {"groundtruth", "gt", "labels", "label"}
+LABEL_TAG = re.compile(r"^(gt|ground[_\-\s]?truth|labels?)[_\-\s]+|[_\-\s]+(gt|ground[_\-\s]?truth|labels?)$", re.I)
+def key_of(stem):
+    """Khoá ghép, như nhau cho model / audio / nhãn: bỏ tiền tố / hậu tố nhãn, không phân biệt hoa thường (Gt_asm_x = Asm_x)."""
+    return (LABEL_TAG.sub("", stem) or stem).casefold()
+
+def index_files(root, exts):
+    """key_of(tên) -> file, ở mọi thư mục con. Khoá trùng (>= 2 file) không biết ghép file nào -> bỏ, trả riêng trong dup."""
+    out, dup = {}, {}
+    if root is None or not Path(root).exists(): return out, dup
+    for p in sorted(Path(root).rglob("*")):
+        if p.suffix.lower() not in exts or not p.is_file(): continue
+        k = key_of(p.stem)
+        if k in out or k in dup: dup.setdefault(k, [out.pop(k)] if k in out else []).append(p)
+        else: out[k] = p
+    return out, dup
+
+def sub_dir(p, root):
+    """Thư mục con đầu tiên chứa p dưới root, bỏ qua thư mục kiểu groundtruth; None nếu p nằm thẳng trong root."""
+    parts = [q for q in Path(p).relative_to(root).parts[:-1] if norm_name(q) not in LABEL_DIRS]
+    return parts[0] if parts else None
 
 LAB = {"speech": 1, "sp": 1, "1": 1, "non-speech": 0, "nonspeech": 0, "non_speech": 0, "non speech": 0, "ns": 0, "0": 0,
        "silence": 0, "noise": 0}
@@ -184,33 +199,47 @@ def auc(y, s): return roc_auc_score(y, s) if len(y) and 0 < np.mean(y) < 1 else 
 def cat_(files, key, src=None): return np.concatenate([(src or recs)[f][key] for f in files])
 
 # =============== 5a. Ghép file audio <-> output model <-> nhãn ===============
-audio = {p.stem: p for p in A.audio.rglob("*") if p.suffix.lower() in AUDIO_EXTS} if A.audio and A.audio.exists() else {}
-raw = {}
-dup = []
-for p in sorted(A.raw.rglob("*.txt")):
-    if p.stem in raw: dup.append(p.stem)
-    raw[p.stem] = p
+# khoá ghép = key_of(tên file); tên hiển thị (cột file) = tên file output model
+SOURCES = dict(raw=(A.raw, {".txt"}), audio=(A.audio, AUDIO_EXTS), gt=(A.gt, {".txt"}),
+               gt_alt=(A.gt_alt, {".txt"}), label2=(A.label2, {".txt"}))
+idx = {n: index_files(r, ex) for n, (r, ex) in SOURCES.items()}
+(raw, _), (audio, _), (gt, _), (gt_alt, _), (lab2, _) = idx.values()
 real_raw = {k for k in raw if not k.startswith("syn_")}
-gt, gt_alt, lab2 = index_gt(A.gt), index_gt(A.gt_alt), index_gt(A.label2)
 checks = [("raw", real_raw), ("gt", gt)] + ([("audio", audio)] if audio else []) + \
          ([("gt_alt", gt_alt)] if A.gt_alt else []) + ([("label2", lab2)] if A.label2 else [])
-problems = [(k, "tên trùng trong thư mục output model") for k in dup]
+problems = [(p.relative_to(SOURCES[n][0]).as_posix(), f"tên trùng trong --{n}, không biết ghép file nào")
+            for n, (_, dup) in idx.items() for ps in dup.values() for p in ps]
 for k in sorted(set(real_raw) | set(gt) | set(audio)):
     miss = [n for n, d in checks if k not in d]
-    if miss: problems.append((k, "thiếu " + ", ".join(miss)))
-keys = sorted(set(real_raw) & set(gt) & (set(audio) if audio else set(gt)))
+    if miss: problems.append(((raw.get(k) or audio.get(k) or gt[k]).stem, "thiếu " + ", ".join(miss)))
+keys = sorted(set(real_raw) & set(gt) & (set(audio) if audio else set(gt)), key=lambda k: raw[k].stem)
 if not keys:
+    ex = lambda d, ks: [d[k].stem for k in sorted(ks)[:3]]
     raise SystemExit("Không ghép được file nào giữa output model, nhãn" + (" và audio" if audio else "") +
-                     f". Ví dụ tên: model {sorted(real_raw)[:3]}, nhãn {sorted(gt)[:3]}, audio {sorted(audio)[:3]}")
-S.update(n_audio=len(audio), n_raw_real=len(real_raw), n_gt=len(gt), n_pairs=len(keys), problems=problems)
+                     f". Ví dụ tên: model {ex(raw, real_raw)}, nhãn {ex(gt, gt)}, audio {ex(audio, audio)}")
+
+# nhóm chính (cột category): thư mục quality của model / thư mục category của audio (không có thì của nhãn) / tiền tố tên
+qual = {k: sub_dir(raw[k], A.raw) for k in keys}
+fcat = {k: (sub_dir(audio[k], A.audio) if k in audio else None) or sub_dir(gt[k], A.gt) for k in keys}
+GROUPS = dict(quality=qual, category=fcat, none=dict.fromkeys(keys, "Tất cả"),
+              prefix={k: raw[k].stem.split("_")[0] if "_" in raw[k].stem else None for k in keys})
+GROUP_BY = A.group if A.group != "auto" else next(h for h in ("quality", "category", "prefix", "none") if all(GROUPS[h].values()))
+grp = pd.Series({k: GROUPS[GROUP_BY][k] or "Khác" for k in keys})
+small = sorted(set(grp) - set(grp.value_counts()[lambda c: c >= 2].index))   # nhóm 1 file: không chia dev/test được
+grp[grp.isin(small)] = "Khác"
+S.update(n_audio=len(audio), n_raw_real=len(real_raw), n_gt=len(gt), n_pairs=len(keys), problems=problems,
+         group_by=GROUP_BY, groups_merged=small)
 
 recs = {}
 for k in keys:
+    f = raw[k].stem
     y = load_labels(gt[k]); n = len(y); m = load_model(raw[k], center=True)
     ya = load_labels(gt_alt[k]) if k in gt_alt else None
-    y2 = load_labels(lab2[k]) if k in lab2 else (silero_bins(k, n) if A.silero_cache and not A.label2 else None)
+    y2 = load_labels(lab2[k]) if k in lab2 else \
+        (silero_bins(audio.get(k, raw[k]).stem, n) if A.silero_cache and not A.label2 else None)   # cache đặt theo tên audio
     dur, sr_, ch_ = audio_info(audio[k]) if k in audio else (np.nan, None, None)
-    recs[k] = dict(file=k, category=k.split("_")[0], y=y, n=n, m=m, m0=load_model(raw[k], center=False), dur=dur, sr=sr_, ch=ch_,
+    recs[f] = dict(file=f, category=grp[k], quality_dir=qual[k], category_dir=fcat[k],
+                   y=y, n=n, m=m, m0=load_model(raw[k], center=False), dur=dur, sr=sr_, ch=ch_,
                    has_alt=ya is not None, alt_len_ok=ya is None or len(ya) == n, y_alt=fit(ya, n) if ya is not None else y.copy(),
                    has_l2=y2 is not None, l2_len_ok=y2 is None or len(y2) == n, y2=fit(y2, n) if y2 is not None else None)
 HAS_ALT = any(d["has_alt"] for d in recs.values()); HAS_L2 = any(d["has_l2"] for d in recs.values())
@@ -224,11 +253,11 @@ for d in recs.values():   # người gán 2 so với nhãn cùng quy tắc: --gt
 syn = {}
 if A.synth_gt and A.synth_gt.exists():
     for k in sorted(r for r in raw if r.startswith("syn_val_")):
-        p = A.synth_gt / f"{k}.txt"
+        p = A.synth_gt / f"{raw[k].stem}.txt"
         if not p.exists() or raw[k].stat().st_size == 0: continue
         y = load_labels(p); m = load_model(raw[k]); n = len(y)
         if n < 2 or len(m) == 0: continue
-        syn[k] = dict(y=y, n=n, m=m, braw=bin_scores(m, n), fr=rescore_hop(m, dur=n * BIN, weight=A.overlap, smooth=A.smooth))
+        syn[raw[k].stem] = dict(y=y, n=n, m=m, braw=bin_scores(m, n), fr=rescore_hop(m, dur=n * BIN, weight=A.overlap, smooth=A.smooth))
 S["n_synth_val"] = len(syn)
 
 # =============== 5b/5c/5d. Cấu trúc, định dạng audio ===============
@@ -306,7 +335,8 @@ def pred_cached(d, thr, mode="A4", pre=None, post=None, gap=None):
 rows = []
 for f, d in recs.items():
     y = d["y"]; segs = bins_to_segs(y)
-    rows.append(dict(file=f, category=d["category"], dur_s=d["n"] * BIN, speech_ratio=y.mean(),
+    rows.append(dict(file=f, category=d["category"], quality_dir=d["quality_dir"], category_dir=d["category_dir"],
+                     dur_s=d["n"] * BIN, speech_ratio=y.mean(),
                      speech_ratio_alt=d["y_alt"].mean() if d["has_alt"] else np.nan,
                      bins_khac_alt=int((y != d["y_alt"]).sum()) if d["has_alt"] else np.nan,
                      l2_ratio=d["y2"].mean() if d["has_l2"] else np.nan,
@@ -333,6 +363,9 @@ for c in CATS:
     for i, f in enumerate(fs): split[f] = "dev" if i < nd else "test"
 pf["split"] = pf.file.map(split)
 dev = sorted(pf.file[pf.split == "dev"]); test = sorted(pf.file[pf.split == "test"])
+if not dev or not test:
+    raise SystemExit(f"Chia dev/test ra {len(dev)} / {len(test)} file ({len(pf)} file, --dev-frac {A.dev_frac}): "
+                     "cần ít nhất 1 file mỗi tập. Thêm file hoặc đổi --dev-frac.")
 CATS_T = [c for c in CATS if any(recs[f]["category"] == c for f in test)]          # category có file test
 S.update(n_dev=len(dev), n_test=len(test), pct_speech_dev=float(cat_(dev, "y").mean()), pct_speech_test=float(cat_(test, "y").mean()))
 
@@ -585,7 +618,7 @@ pd.DataFrame(deltas, columns=["d_onset", "d_offset"]).to_csv(XL / "deltas.csv", 
 S["meta"] = dict(root=str(A.root) if A.root else None, raw=str(A.raw), gt=str(A.gt), audio=str(A.audio) if audio else None,
                  gt_alt=str(A.gt_alt) if HAS_ALT else None, label2=L2_NAME if HAS_L2 else None, synth=bool(syn),
                  mo_ta_nhan=A.mo_ta_nhan or f"Nhãn trong {A.gt.as_posix()}", mo_ta_model=A.mo_ta_model or f"Output model: {A.raw.as_posix()}",
-                 categories=CATS_T, all_categories=CATS, rescore=rescore_desc(A.overlap, A.smooth), rescore_weight=A.overlap,
+                 categories=CATS_T, all_categories=CATS, group_by=GROUP_BY, rescore=rescore_desc(A.overlap, A.smooth), rescore_weight=A.overlap,
                  config_desc=CONFIG_DESC, params=PARAMS)
 pf = pf.merge(lagdf[["file", "lag_s", "peak_corr"]], on="file", how="left")
 pf.to_csv(OUT / "per_file.csv", index=False); struct.to_csv(OUT / "structure.csv", index=False)
