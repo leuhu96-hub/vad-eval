@@ -1,0 +1,4 @@
+file,bin,t_start,GT,score,category,nghi_van
+Babble_1.txt,19,9.5,non-speech,0.999,Babble,0.9989
+Babble_15.txt,19,9.5,non-speech,0.978,Babble,0.978
+Noise_3.txt,19,9.5,non-speech,0.91,Noise,0.9096

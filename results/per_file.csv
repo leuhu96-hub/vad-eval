@@ -1,0 +1,150 @@
+file,category,speech_ratio,transitions,n_speech_seg,mean_speech_seg_s,boundary_frac,auc_file,snr_db,seen_in_train,speech_src,noise_src,injected_shift_s,degenerate,extreme,seen,group_full,group,split,snr_bucket
+Asm_1.txt,Asm,0.7,6,3,2.3333333333333335,0.6,0.9642857142857144,16.8,False,utt_076,asm_noise_02,0.0,False,False,False,src:noise_noise_04,sp:utt_076,dev,10–20
+Asm_10.txt,Asm,0.4,6,4,1.0,0.6,0.9791666666666667,26.6,False,utt_053,asm_noise_04,0.0,False,False,False,src:noise_noise_17,sp:utt_053,test,>20
+Asm_11.txt,Asm,0.6,4,3,2.0,0.4,1.0,19.8,False,utt_033,asm_noise_04,0.0,False,False,False,src:noise_noise_17,sp:utt_033,dev,10–20
+Asm_12.txt,Asm,0.3,6,3,1.0,0.55,1.0,17.6,False,utt_053,asm_noise_04,0.0,False,False,False,src:noise_noise_17,sp:utt_053,test,10–20
+Asm_13.txt,Asm,0.55,5,3,1.8333333333333333,0.45,1.0,28.0,True,utt_043,asm_noise_06,0.0,False,False,True,src:noise_noise_17,sp:utt_043,seen (loại),>20
+Asm_14.txt,Asm,0.6,4,3,2.0,0.4,1.0,27.9,False,utt_027,asm_noise_15,0.0,False,False,False,src:noise_noise_17,sp:utt_027,dev,>20
+Asm_15.txt,Asm,0.65,5,3,2.1666666666666665,0.5,1.0,21.7,True,utt_025,asm_noise_21,0.0,False,False,True,src:asm_noise_21,sp:utt_025,seen (loại),>20
+Asm_16.txt,Asm,0.4,4,2,2.0,0.4,1.0,26.6,False,utt_074,asm_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_074,dev,>20
+Asm_17.txt,Asm,0.65,6,3,2.1666666666666665,0.55,0.9560439560439561,16.4,False,utt_024,asm_noise_05,0.0,False,False,False,src:noise_noise_17,sp:utt_024,test,10–20
+Asm_18.txt,Asm,0.5,4,2,2.5,0.4,1.0,22.9,True,utt_031,asm_noise_05,0.0,False,False,True,src:noise_noise_17,sp:utt_031,seen (loại),>20
+Asm_19.txt,Asm,0.6,7,4,1.5,0.65,0.9895833333333334,22.7,False,utt_009,asm_noise_18,0.0,False,False,False,src:asm_noise_18,sp:utt_009,test,>20
+Asm_2.txt,Asm,1.0,0,1,10.0,0.0,,29.3,True,utt_040,asm_noise_16,0.0,True,True,True,src:noise_noise_04,sp:utt_040,seen (loại),>20
+Asm_20.txt,Asm,0.7,5,3,2.3333333333333335,0.45,1.0,20.8,False,utt_053,asm_noise_13,0.0,False,False,False,src:noise_noise_17,sp:utt_053,test,>20
+Asm_21.txt,Asm,1.0,0,1,10.0,0.0,,19.1,False,utt_076,asm_noise_16,0.0,True,True,False,src:noise_noise_04,sp:utt_076,dev,10–20
+Asm_22.txt,Asm,0.5,7,4,1.25,0.7,1.0,29.0,False,utt_020,asm_noise_03,0.0,False,False,False,src:noise_noise_17,sp:utt_020,test,>20
+Asm_23.txt,Asm,0.8,6,4,2.0,0.5,1.0,21.8,True,utt_064,asm_noise_08,0.0,False,False,True,src:asm_noise_08,sp:utt_064,seen (loại),>20
+Asm_24.txt,Asm,0.7,7,4,1.75,0.55,0.9761904761904763,16.1,True,utt_012,asm_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_012,seen (loại),10–20
+Asm_25.txt,Asm,0.45,7,4,1.125,0.7,0.9696969696969697,24.3,False,utt_049,asm_noise_05,0.0,False,False,False,src:noise_noise_17,sp:utt_049,test,>20
+Asm_26.txt,Asm,0.6,5,3,2.0,0.5,1.0,27.0,True,utt_022,asm_noise_07,0.0,False,False,True,src:asm_noise_07,sp:utt_022,seen (loại),>20
+Asm_27.txt,Asm,0.5,7,4,1.25,0.65,1.0,15.6,True,utt_028,asm_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_028,seen (loại),10–20
+Asm_28.txt,Asm,0.65,3,2,3.25,0.3,1.0,19.1,False,utt_029,asm_noise_13,0.0,False,False,False,src:noise_noise_17,sp:utt_029,test,10–20
+Asm_29.txt,Asm,0.75,7,4,1.875,0.55,1.0,22.8,False,utt_045,asm_noise_03,0.0,False,False,False,src:noise_noise_17,sp:utt_045,test,>20
+Asm_3.txt,Asm,0.35,6,3,1.1666666666666667,0.5,0.989010989010989,20.0,False,utt_016,asm_noise_16,0.0,False,False,False,src:noise_noise_04,sp:utt_016,dev,10–20
+Asm_30.txt,Asm,0.5,4,2,2.5,0.4,1.0,26.5,True,utt_048,asm_noise_12,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),>20
+Asm_4.txt,Asm,0.55,5,3,1.8333333333333333,0.45,0.9696969696969697,16.7,True,utt_030,asm_noise_12,0.0,False,False,True,src:noise_noise_17,sp:utt_030,seen (loại),10–20
+Asm_5.txt,Asm,0.65,4,2,3.25,0.4,0.989010989010989,21.0,False,utt_042,asm_noise_00,0.0,False,False,False,src:noise_noise_17,sp:utt_042,dev,>20
+Asm_6.txt,Asm,0.65,7,4,1.625,0.6,0.9560439560439561,17.5,True,utt_030,asm_noise_00,0.0,False,False,True,src:noise_noise_17,sp:utt_030,seen (loại),10–20
+Asm_7.txt,Asm,1.0,0,1,10.0,0.0,,16.5,False,utt_017,asm_noise_13,0.0,True,True,False,src:noise_noise_17,sp:utt_017,test,10–20
+Asm_8.txt,Asm,0.7,6,4,1.75,0.5,1.0,23.1,False,utt_059,asm_noise_05,0.0,False,False,False,src:noise_noise_17,sp:utt_059,test,>20
+Asm_9.txt,Asm,0.4,5,3,1.3333333333333333,0.5,1.0,20.9,False,utt_014,asm_noise_11,0.0,False,False,False,src:asm_noise_11,sp:utt_014,test,>20
+Babble_1.txt,Babble,0.55,6,3,1.8333333333333333,0.5,0.7878787878787878,0.2,False,utt_055,babble_noise_03,0.0,False,False,False,src:noise_noise_17,sp:utt_055,test,0–5
+Babble_10.txt,Babble,0.6,6,4,1.5,0.55,1.0,10.6,False,utt_069,babble_noise_00,0.0,False,False,False,src:noise_noise_17,sp:utt_069,dev,10–20
+Babble_11.txt,Babble,0.65,6,4,1.625,0.55,1.0,5.3,True,utt_038,babble_noise_10,0.0,False,False,True,src:noise_noise_17,sp:utt_038,seen (loại),5–10
+Babble_12.txt,Babble,0.7,6,4,1.75,0.5,0.9523809523809524,0.6,False,utt_021,babble_noise_12,0.0,False,False,False,src:noise_noise_04,sp:utt_021,test,0–5
+Babble_13.txt,Babble,0.4,5,3,1.3333333333333333,0.5,1.0,11.1,True,utt_013,babble_noise_22,0.0,False,False,True,src:noise_noise_04,sp:utt_013,seen (loại),10–20
+Babble_14.txt,Babble,0.65,7,4,1.625,0.65,1.0,5.8,True,utt_017,babble_noise_01,0.0,False,False,True,src:noise_noise_17,sp:utt_017,seen (loại),5–10
+Babble_15.txt,Babble,0.4,4,2,2.0,0.4,0.8541666666666666,0.2,False,utt_067,babble_noise_14,0.0,False,False,False,src:noise_noise_17,sp:utt_067,test,0–5
+Babble_16.txt,Babble,0.75,4,3,2.5,0.35,0.96,10.5,False,utt_078,babble_noise_17,0.0,False,False,False,src:noise_noise_17,sp:utt_078,test,10–20
+Babble_17.txt,Babble,0.7,6,4,1.75,0.55,0.9047619047619048,2.9,False,utt_000,babble_noise_07,0.0,False,False,False,src:noise_noise_17,sp:utt_000,dev,0–5
+Babble_18.txt,Babble,0.55,3,2,2.75,0.3,1.0,1.2,True,utt_004,babble_noise_12,0.0,False,False,True,src:noise_noise_04,sp:utt_004,seen (loại),0–5
+Babble_19.txt,Babble,0.5,5,3,1.6666666666666667,0.45,0.97,7.1,True,utt_011,babble_noise_02,0.0,False,False,True,src:babble_noise_02,sp:utt_011,seen (loại),5–10
+Babble_2.txt,Babble,0.6,4,3,2.0,0.4,1.0,9.6,False,utt_012,babble_noise_14,0.0,False,False,False,src:noise_noise_17,sp:utt_012,dev,5–10
+Babble_20.txt,Babble,0.55,6,4,1.375,0.5,1.0,4.7,True,utt_043,babble_noise_01,0.0,False,False,True,src:noise_noise_17,sp:utt_043,seen (loại),0–5
+Babble_21.txt,Babble,0.65,4,3,2.1666666666666665,0.4,1.0,11.5,True,utt_002,babble_noise_13,0.0,False,False,True,src:noise_noise_17,sp:utt_002,seen (loại),10–20
+Babble_22.txt,Babble,0.5,5,3,1.6666666666666667,0.45,0.9800000000000001,4.0,True,utt_077,babble_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_077,seen (loại),0–5
+Babble_23.txt,Babble,0.45,6,3,1.5,0.55,1.0,4.5,False,utt_003,babble_noise_09,0.0,False,False,False,src:noise_noise_17,sp:utt_003,test,0–5
+Babble_24.txt,Babble,0.65,6,4,1.625,0.55,0.9670329670329669,1.4,True,utt_003,babble_noise_19,0.0,False,False,True,src:noise_noise_17,sp:utt_003,seen (loại),0–5
+Babble_25.txt,Babble,0.55,6,4,1.375,0.55,1.0,3.5,True,utt_004,babble_noise_22,0.0,False,False,True,src:noise_noise_04,sp:utt_004,seen (loại),0–5
+Babble_26.txt,Babble,0.7,6,3,2.3333333333333335,0.55,0.9523809523809524,6.5,True,utt_016,babble_noise_20,0.0,False,False,True,src:noise_noise_04,sp:utt_016,seen (loại),5–10
+Babble_27.txt,Babble,0.5,4,2,2.5,0.4,0.97,10.1,True,utt_048,babble_noise_16,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),10–20
+Babble_28.txt,Babble,0.55,5,3,1.8333333333333333,0.45,1.0,8.2,True,utt_034,babble_noise_10,0.0,False,False,True,src:noise_noise_17,sp:utt_034,seen (loại),5–10
+Babble_29.txt,Babble,0.65,4,3,2.1666666666666665,0.4,1.0,12.0,True,utt_038,babble_noise_19,0.0,False,False,True,src:noise_noise_17,sp:utt_038,seen (loại),10–20
+Babble_3.txt,Babble,0.6,4,3,2.0,0.4,1.0,11.5,True,utt_077,babble_noise_07,0.5,False,False,True,src:noise_noise_17,sp:utt_077,seen (loại),10–20
+Babble_4.txt,Babble,0.45,5,3,1.5,0.5,1.0,2.9,True,utt_078,babble_noise_01,0.0,False,False,True,src:noise_noise_17,sp:utt_078,seen (loại),0–5
+Babble_5.txt,Babble,0.4,6,3,1.3333333333333333,0.6,0.9791666666666667,4.1,True,utt_060,babble_noise_22,0.0,False,False,True,src:noise_noise_04,sp:utt_060,seen (loại),0–5
+Babble_6.txt,Babble,0.5,5,3,1.6666666666666667,0.5,0.99,4.4,True,utt_027,babble_noise_19,0.0,False,False,True,src:noise_noise_17,sp:utt_027,seen (loại),0–5
+Babble_7.txt,Babble,0.5,5,3,1.6666666666666667,0.45,1.0,11.4,True,utt_039,babble_noise_23,0.0,False,False,True,src:noise_noise_17,sp:utt_039,seen (loại),10–20
+Babble_8.txt,Babble,0.35,5,3,1.1666666666666667,0.5,1.0,6.5,True,utt_066,babble_noise_00,0.0,False,False,True,src:noise_noise_17,sp:utt_066,seen (loại),5–10
+Babble_9.txt,Babble,0.65,3,2,3.25,0.3,0.9120879120879122,4.6,False,utt_062,babble_noise_22,0.0,False,False,False,src:noise_noise_04,sp:utt_062,test,0–5
+Clean_1.txt,Clean,0.65,3,2,3.25,0.3,1.0,20.6,False,utt_007,clean_noise_05,0.0,False,False,False,src:noise_noise_08,sp:utt_007,dev,>20
+Clean_10.txt,Clean,0.55,5,3,1.8333333333333333,0.5,1.0,34.4,False,utt_059,clean_noise_00,0.0,False,False,False,src:noise_noise_17,sp:utt_059,test,>20
+Clean_11.txt,Clean,0.7,6,4,1.75,0.55,0.9880952380952381,33.4,True,utt_077,clean_noise_19,0.0,False,False,True,src:noise_noise_17,sp:utt_077,seen (loại),>20
+Clean_12.txt,Clean,0.7,4,3,2.3333333333333335,0.4,1.0,25.0,False,utt_070,clean_noise_07,0.0,False,False,False,src:noise_noise_17,sp:utt_070,test,>20
+Clean_13.txt,Clean,0.8,5,3,2.6666666666666665,0.45,0.96875,20.7,True,utt_023,clean_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_023,seen (loại),>20
+Clean_14.txt,Clean,0.75,5,3,2.5,0.45,1.0,22.0,True,utt_037,clean_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_037,seen (loại),>20
+Clean_15.txt,Clean,0.65,5,3,2.1666666666666665,0.5,1.0,27.2,True,utt_066,clean_noise_02,0.0,False,False,True,src:noise_noise_17,sp:utt_066,seen (loại),>20
+Clean_16.txt,Clean,0.45,6,3,1.5,0.55,1.0,22.4,False,utt_041,clean_noise_13,0.0,False,False,False,src:noise_noise_17,sp:utt_041,test,>20
+Clean_17.txt,Clean,0.8,6,4,2.0,0.5,0.96875,26.8,False,utt_052,clean_noise_05,0.0,False,False,False,src:noise_noise_08,sp:utt_052,dev,>20
+Clean_18.txt,Clean,0.6,6,4,1.5,0.6,1.0,21.8,False,utt_038,clean_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_038,test,>20
+Clean_19.txt,Clean,0.7,5,3,2.3333333333333335,0.45,1.0,30.5,True,utt_071,clean_noise_22,0.0,False,False,True,src:clean_noise_22,sp:utt_071,seen (loại),>20
+Clean_2.txt,Clean,0.55,7,4,1.375,0.65,0.9797979797979798,22.7,True,utt_023,clean_noise_07,0.0,False,False,True,src:noise_noise_17,sp:utt_023,seen (loại),>20
+Clean_20.txt,Clean,0.75,4,3,2.5,0.35,1.0,24.1,False,utt_003,clean_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_003,test,>20
+Clean_21.txt,Clean,0.6,4,2,3.0,0.4,1.0,20.1,True,utt_061,clean_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_061,seen (loại),>20
+Clean_22.txt,Clean,0.75,3,2,3.75,0.3,0.9733333333333334,28.2,False,utt_039,clean_noise_20,0.0,False,False,False,src:noise_noise_17,sp:utt_039,test,>20
+Clean_23.txt,Clean,0.5,4,2,2.5,0.4,1.0,23.8,False,utt_074,clean_noise_13,0.0,False,False,False,src:noise_noise_17,sp:utt_074,dev,>20
+Clean_24.txt,Clean,0.65,5,3,2.1666666666666665,0.5,1.0,34.2,True,utt_016,clean_noise_06,0.0,False,False,True,src:noise_noise_04,sp:utt_016,seen (loại),>20
+Clean_25.txt,Clean,0.5,5,3,1.6666666666666667,0.5,1.0,35.0,False,utt_041,clean_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_041,test,>20
+Clean_26.txt,Clean,0.5,6,4,1.25,0.6,1.0,34.2,False,utt_055,clean_noise_08,0.0,False,False,False,src:noise_noise_17,sp:utt_055,test,>20
+Clean_27.txt,Clean,0.5,5,3,1.6666666666666667,0.5,1.0,24.3,True,utt_000,clean_noise_10,0.0,False,False,True,src:noise_noise_17,sp:utt_000,seen (loại),>20
+Clean_28.txt,Clean,0.55,5,3,1.8333333333333333,0.45,1.0,28.7,False,utt_024,clean_noise_01,0.0,False,False,False,src:noise_noise_17,sp:utt_024,test,>20
+Clean_29.txt,Clean,0.7,5,3,2.3333333333333335,0.5,1.0,22.1,True,utt_016,clean_noise_06,0.0,False,False,True,src:noise_noise_04,sp:utt_016,seen (loại),>20
+Clean_3.txt,Clean,0.7,4,3,2.3333333333333335,0.4,1.0,30.6,True,utt_031,clean_noise_00,0.0,False,False,True,src:noise_noise_17,sp:utt_031,seen (loại),>20
+Clean_30.txt,Clean,0.6,5,3,2.0,0.5,0.9895833333333334,34.7,True,utt_030,clean_noise_13,0.0,False,False,True,src:noise_noise_17,sp:utt_030,seen (loại),>20
+Clean_4.txt,Clean,0.65,4,3,2.1666666666666665,0.4,1.0,25.6,False,utt_061,clean_noise_08,0.0,False,False,False,src:noise_noise_17,sp:utt_061,dev,>20
+Clean_5.txt,Clean,0.55,6,4,1.375,0.6,1.0,29.8,False,utt_047,clean_noise_03,0.0,False,False,False,src:clean_noise_03,sp:utt_047,dev,>20
+Clean_6.txt,Clean,0.6,5,3,2.0,0.45,1.0,22.8,True,utt_048,clean_noise_15,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),>20
+Clean_7.txt,Clean,0.65,4,2,3.25,0.35,1.0,20.8,False,utt_065,clean_noise_19,0.5,False,False,False,src:noise_noise_17,sp:utt_065,test,>20
+Clean_8.txt,Clean,0.55,4,3,1.8333333333333333,0.4,1.0,26.4,True,utt_028,clean_noise_10,0.0,False,False,True,src:noise_noise_17,sp:utt_028,seen (loại),>20
+Clean_9.txt,Clean,0.5,6,4,1.25,0.55,1.0,34.7,True,utt_035,clean_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_035,seen (loại),>20
+Music_1.txt,Music,0.7,4,3,2.3333333333333335,0.4,1.0,10.7,False,utt_033,music_noise_08,0.0,False,False,False,src:noise_noise_17,sp:utt_033,dev,10–20
+Music_10.txt,Music,0.6,4,3,2.0,0.4,1.0,5.5,False,utt_049,music_noise_07,0.0,False,False,False,src:noise_noise_17,sp:utt_049,test,5–10
+Music_11.txt,Music,0.6,4,3,2.0,0.4,1.0,7.5,False,utt_078,music_noise_23,0.0,False,False,False,src:noise_noise_17,sp:utt_078,test,5–10
+Music_12.txt,Music,0.0,0,0,0.0,0.0,,5.6,False,,music_noise_11,0.0,True,True,False,src:music_noise_11,nz:music_noise_11,test,5–10
+Music_13.txt,Music,0.65,5,3,2.1666666666666665,0.5,0.8681318681318682,0.7,False,utt_027,music_noise_03,0.0,False,False,False,src:noise_noise_17,sp:utt_027,dev,0–5
+Music_14.txt,Music,0.5,5,3,1.6666666666666667,0.45,0.93,3.4,False,utt_070,music_noise_23,0.0,False,False,False,src:noise_noise_17,sp:utt_070,test,0–5
+Music_15.txt,Music,0.0,0,0,0.0,0.0,,8.0,True,,music_noise_06,0.0,True,True,True,src:music_noise_06,nz:music_noise_06,seen (loại),5–10
+Music_16.txt,Music,0.7,4,3,2.3333333333333335,0.4,1.0,9.2,True,utt_048,music_noise_15,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),5–10
+Music_17.txt,Music,0.6,5,3,2.0,0.5,1.0,4.6,True,utt_079,music_noise_02,0.0,False,False,True,src:music_noise_02,sp:utt_079,seen (loại),0–5
+Music_18.txt,Music,0.6,4,2,3.0,0.4,0.96875,0.7,False,utt_049,music_noise_23,0.0,False,False,False,src:noise_noise_17,sp:utt_049,test,0–5
+Music_19.txt,Music,0.4,6,3,1.3333333333333333,0.6,1.0,10.9,False,utt_072,music_noise_02,0.0,False,False,False,src:music_noise_02,sp:utt_072,dev,10–20
+Music_2.txt,Music,0.5,5,3,1.6666666666666667,0.5,0.99,4.8,True,utt_004,music_noise_21,0.0,False,False,True,src:noise_noise_04,sp:utt_004,seen (loại),0–5
+Music_20.txt,Music,0.6,4,3,2.0,0.4,1.0,7.2,False,utt_036,music_noise_12,0.0,False,False,False,src:noise_noise_17,sp:utt_036,test,5–10
+Music_21.txt,Music,0.5,5,3,1.6666666666666667,0.5,0.97,0.7,False,utt_045,music_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_045,test,0–5
+Music_22.txt,Music,0.65,5,3,2.1666666666666665,0.5,0.9780219780219781,13.9,True,utt_041,music_noise_16,0.0,False,False,True,src:noise_noise_17,sp:utt_041,seen (loại),10–20
+Music_23.txt,Music,0.45,5,3,1.5,0.5,0.9898989898989898,9.8,False,utt_070,music_noise_24,0.0,False,False,False,src:noise_noise_17,sp:utt_070,test,5–10
+Music_24.txt,Music,0.55,5,3,1.8333333333333333,0.5,1.0,3.4,True,utt_048,music_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),0–5
+Music_25.txt,Music,0.7,6,4,1.75,0.55,1.0,14.4,True,utt_026,music_noise_22,0.0,False,False,True,src:music_noise_22,sp:utt_026,seen (loại),10–20
+Music_26.txt,Music,0.7,6,3,2.3333333333333335,0.55,0.9404761904761905,6.5,True,utt_034,music_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_034,seen (loại),5–10
+Music_27.txt,Music,0.8,4,3,2.6666666666666665,0.4,1.0,12.4,True,utt_013,music_noise_05,0.0,False,False,True,src:noise_noise_04,sp:utt_013,seen (loại),10–20
+Music_28.txt,Music,0.65,6,4,1.625,0.55,1.0,0.5,True,utt_032,music_noise_24,0.0,False,False,True,src:noise_noise_17,sp:utt_032,seen (loại),0–5
+Music_29.txt,Music,0.0,0,0,0.0,0.0,,6.9,False,,music_noise_24,0.0,True,True,False,src:noise_noise_17,nz:music_noise_24,test,5–10
+Music_3.txt,Music,0.0,0,0,0.0,0.0,,1.6,True,,music_noise_14,0.0,True,True,True,src:music_noise_14,nz:music_noise_14,seen (loại),0–5
+Music_30.txt,Music,0.65,5,3,2.1666666666666665,0.5,0.989010989010989,12.2,False,utt_039,music_noise_12,0.0,False,False,False,src:noise_noise_17,sp:utt_039,test,10–20
+Music_4.txt,Music,0.0,0,0,0.0,0.0,,12.4,False,,music_noise_02,0.0,True,True,False,src:music_noise_02,nz:music_noise_02,dev,10–20
+Music_5.txt,Music,0.6,5,3,2.0,0.45,0.9895833333333334,8.6,False,utt_045,music_noise_07,0.0,False,False,False,src:noise_noise_17,sp:utt_045,test,5–10
+Music_6.txt,Music,0.55,6,4,1.375,0.6,1.0,8.8,True,utt_005,music_noise_19,0.0,False,False,True,src:noise_noise_17,sp:utt_005,seen (loại),5–10
+Music_7.txt,Music,0.65,5,3,2.1666666666666665,0.5,1.0,3.0,False,utt_016,music_noise_05,0.0,False,False,False,src:noise_noise_04,sp:utt_016,dev,0–5
+Music_8.txt,Music,0.65,4,3,2.1666666666666665,0.4,0.9670329670329672,9.5,False,utt_028,music_noise_23,0.0,False,False,False,src:noise_noise_17,sp:utt_028,dev,5–10
+Music_9.txt,Music,0.55,4,2,2.75,0.4,1.0,4.1,True,utt_046,music_noise_04,0.0,False,False,True,src:music_noise_04,sp:utt_046,seen (loại),0–5
+Noise_1.txt,Noise,0.8,5,3,2.6666666666666665,0.45,0.875,-3.0,False,utt_039,noise_noise_10,0.0,False,False,False,src:noise_noise_17,sp:utt_039,test,<0
+Noise_10.txt,Noise,0.5,6,4,1.25,0.6,1.0,4.8,True,utt_077,noise_noise_06,0.0,False,False,True,src:noise_noise_17,sp:utt_077,seen (loại),0–5
+Noise_11.txt,Noise,0.55,6,3,1.8333333333333333,0.6,1.0,-3.4,True,utt_023,noise_noise_10,0.0,False,False,True,src:noise_noise_17,sp:utt_023,seen (loại),<0
+Noise_12.txt,Noise,0.65,6,4,1.625,0.5,1.0,8.3,False,utt_037,noise_noise_24,0.5,False,False,False,src:noise_noise_17,sp:utt_037,test,5–10
+Noise_13.txt,Noise,0.55,4,2,2.75,0.4,1.0,5.5,True,utt_040,noise_noise_12,0.0,False,False,True,src:noise_noise_04,sp:utt_040,seen (loại),5–10
+Noise_14.txt,Noise,0.75,4,3,2.5,0.35,1.0,7.6,False,utt_003,noise_noise_09,0.0,False,False,False,src:noise_noise_17,sp:utt_003,test,5–10
+Noise_15.txt,Noise,0.65,5,3,2.1666666666666665,0.45,1.0,6.9,False,utt_020,noise_noise_01,0.0,False,False,False,src:noise_noise_17,sp:utt_020,test,5–10
+Noise_16.txt,Noise,1.0,0,1,10.0,0.0,,2.3,False,utt_000,noise_noise_19,0.0,True,True,False,src:noise_noise_17,sp:utt_000,dev,0–5
+Noise_17.txt,Noise,0.5,5,3,1.6666666666666667,0.5,1.0,8.9,True,utt_057,noise_noise_12,0.0,False,False,True,src:noise_noise_04,sp:utt_057,seen (loại),5–10
+Noise_18.txt,Noise,0.6,4,3,2.0,0.4,0.8125,-4.7,False,utt_024,noise_noise_19,0.0,False,False,False,src:noise_noise_17,sp:utt_024,test,<0
+Noise_19.txt,Noise,0.55,4,2,2.75,0.4,1.0,9.5,True,utt_032,noise_noise_21,0.0,False,False,True,src:noise_noise_17,sp:utt_032,seen (loại),5–10
+Noise_2.txt,Noise,0.55,7,4,1.375,0.7,1.0,9.9,True,utt_030,noise_noise_06,0.0,False,False,True,src:noise_noise_17,sp:utt_030,seen (loại),5–10
+Noise_20.txt,Noise,0.55,4,2,2.75,0.4,0.9898989898989898,4.3,False,utt_067,noise_noise_00,0.0,False,False,False,src:noise_noise_17,sp:utt_067,test,0–5
+Noise_21.txt,Noise,0.55,6,4,1.375,0.6,1.0,7.4,False,utt_039,noise_noise_01,0.0,False,False,False,src:noise_noise_17,sp:utt_039,test,5–10
+Noise_22.txt,Noise,0.75,5,3,2.5,0.5,0.7733333333333333,1.5,False,utt_003,noise_noise_18,0.0,False,False,False,src:noise_noise_17,sp:utt_003,test,0–5
+Noise_23.txt,Noise,0.65,6,4,1.625,0.5,1.0,-3.6,True,utt_005,noise_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_005,seen (loại),<0
+Noise_24.txt,Noise,0.6,4,2,3.0,0.4,0.96875,5.7,False,utt_070,noise_noise_09,0.0,False,False,False,src:noise_noise_17,sp:utt_070,test,5–10
+Noise_25.txt,Noise,0.7,4,2,3.5,0.35,1.0,2.7,True,utt_032,noise_noise_00,0.0,False,False,True,src:noise_noise_17,sp:utt_032,seen (loại),0–5
+Noise_26.txt,Noise,0.85,4,2,4.25,0.35,0.7450980392156863,-1.7,True,utt_041,noise_noise_14,0.0,False,False,True,src:noise_noise_17,sp:utt_041,seen (loại),<0
+Noise_27.txt,Noise,0.55,5,3,1.8333333333333333,0.45,0.9797979797979798,4.4,False,utt_002,noise_noise_00,0.0,False,False,False,src:noise_noise_17,sp:utt_002,dev,0–5
+Noise_28.txt,Noise,0.55,5,3,1.8333333333333333,0.5,1.0,8.7,True,utt_050,noise_noise_08,0.0,False,False,True,src:noise_noise_08,sp:utt_050,seen (loại),5–10
+Noise_29.txt,Noise,0.65,6,3,2.1666666666666665,0.55,0.989010989010989,1.7,True,utt_042,noise_noise_20,0.0,False,False,True,src:noise_noise_17,sp:utt_042,seen (loại),0–5
+Noise_3.txt,Noise,0.65,7,4,1.625,0.6,0.6373626373626373,-4.6,False,utt_016,noise_noise_13,0.0,False,False,False,src:noise_noise_04,sp:utt_016,dev,<0
+Noise_30.txt,Noise,0.55,6,3,1.8333333333333333,0.55,1.0,-4.1,True,utt_007,noise_noise_08,0.0,False,False,True,src:noise_noise_08,sp:utt_007,seen (loại),<0
+Noise_4.txt,Noise,0.75,4,3,2.5,0.4,0.9066666666666666,5.4,False,utt_069,noise_noise_19,0.0,False,False,False,src:noise_noise_17,sp:utt_069,dev,5–10
+Noise_5.txt,Noise,0.75,4,3,2.5,0.35,1.0,-4.5,True,utt_034,noise_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_034,seen (loại),<0
+Noise_6.txt,Noise,0.65,3,2,3.25,0.3,1.0,9.7,True,utt_057,noise_noise_04,0.0,False,False,True,src:noise_noise_04,sp:utt_057,seen (loại),5–10
+Noise_7.txt,Noise,0.5,5,3,1.6666666666666667,0.45,1.0,-0.3,True,utt_019,noise_noise_17,0.0,False,False,True,src:noise_noise_17,sp:utt_019,seen (loại),<0
+Noise_8.txt,Noise,0.6,4,2,3.0,0.4,1.0,9.2,True,utt_048,noise_noise_09,0.0,False,False,True,src:noise_noise_17,sp:utt_048,seen (loại),5–10
+Noise_9.txt,Noise,0.55,3,2,2.75,0.3,1.0,9.2,False,utt_001,noise_noise_09,0.0,False,False,False,src:noise_noise_17,sp:utt_001,dev,5–10
