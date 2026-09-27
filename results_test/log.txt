@@ -1,0 +1,173 @@
+Dữ liệu: {
+ "root": "C:\\Users\\leuhu\\OneDrive\\Máy tính\\test",
+ "raw": "C:\\Users\\leuhu\\OneDrive\\Máy tính\\test\\Model",
+ "gt": "C:\\Users\\leuhu\\OneDrive\\Máy tính\\test\\data\\AAA\\Ground_truth",
+ "audio": "C:\\Users\\leuhu\\OneDrive\\Máy tính\\test\\data\\audio",
+ "gt_alt": null,
+ "label2": null,
+ "synth": true,
+ "mo_ta_nhan": "Nhãn trong C:/Users/leuhu/OneDrive/Máy tính/test/data/AAA/Ground_truth",
+ "mo_ta_model": "Output model: C:/Users/leuhu/OneDrive/Máy tính/test/Model",
+ "categories": [
+  "Asm",
+  "Babble",
+  "Clean",
+  "Music",
+  "Noise"
+ ],
+ "all_categories": [
+  "Asm",
+  "Babble",
+  "Clean",
+  "Music",
+  "Noise"
+ ],
+ "rescore": "trọng số tam giác theo tâm cửa sổ + làm mượt trung bình 5 hop",
+ "rescore_weight": "tri"
+}
+{
+ "n_pairs": 144,
+ "problems": [],
+ "n_struct_flag": 0,
+ "struct_flag_files": [],
+ "best_shift_center": 0.08,
+ "best_shift_auc": {
+  "AUC_gt": 0.24,
+  "AUC_synth": 0.0
+ },
+ "lag_median": 0.16,
+ "hours": 4.6090277777777775,
+ "pct_speech_bins": 0.31170709657978,
+ "n_degenerate": 44,
+ "auc_pooled_all": 0.8452795165428391,
+ "auc_macro": 0.7319480132061783,
+ "auc_worst": 0.04781997187060476,
+ "auc_worst_file": "Music_v8KND_z--HA",
+ "n_files_auc_lt_09": 65,
+ "kappa_l2": null,
+ "kappa_l2_boundary": null,
+ "kappa_l2_interior": null,
+ "pct_bins_khac_alt": null,
+ "n_dev": 43,
+ "n_test": 101,
+ "AUC_test_CI": [
+  0.7862761608629472,
+  0.8966725532545878
+ ],
+ "n_synth_val": 500,
+ "auc_synth_val": 0.9391559972634772,
+ "thr_youden_raw_dev": 0.14381766666666665,
+ "best_thr_dev": {
+  "A0": 0.01,
+  "A1": 0.01,
+  "A2": 0.02,
+  "A3": 0.01,
+  "A4": 0.02
+ },
+ "best_thr_synth": {
+  "A0": 0.17,
+  "A1": 0.23,
+  "A2": 0.25,
+  "A3": 0.24,
+  "A4": 0.26
+ },
+ "best_f1_thr_dev": {
+  "A0": 0.17,
+  "A1": 0.29,
+  "A2": 0.33,
+  "A3": 0.19,
+  "A4": 0.29
+ },
+ "thr_at_grid_edge": [
+  "dev/A0",
+  "dev/A1",
+  "dev/A3"
+ ],
+ "event_f1": 0.056009334889148193,
+ "err_types": {
+  "FEC": 169,
+  "MSC": 213,
+  "OVER": 1107,
+  "NDS": 8719
+ },
+ "pct_true_err": 0.875,
+ "F1_CI": [
+  0.4890170540266534,
+  0.6621860857064639
+ ],
+ "DCF_CI": [
+  0.16242942386208897,
+  0.2188964050194554
+ ],
+ "mean_d_onset": -25.040110650069156,
+ "mean_d_offset": 25.764868603042878,
+ "n_suspicious_seg": 994
+}
+
+=== Tầng A (nhãn chính) ===
+                    Tập  n_file  n_bin  pct_speech  AUC_micro  AUC_macro_file  AUC_khong_bien  AUC_chi_bien  AUC_nhan_chac  PR_AUC  TPR_at_FPR1  TPR_at_FPR5  Brier  mean_score_nonspeech
+          Test (tất cả)     101  23656      0.3138     0.8457          0.7242          0.8845        0.5716            NaN  0.7834       0.4636       0.5443 0.1782                0.1743
+                    Asm      21   5040      0.3087     0.7413          0.6246          0.7908        0.5407            NaN  0.6129       0.1742       0.2886 0.2549                0.0264
+                 Babble      19   4305      0.3289     0.7624          0.6156          0.7929        0.5172            NaN  0.5544       0.0487       0.1582 0.2243                0.1158
+                  Clean      21   4752      0.8973     0.9341          0.9327          0.9890        0.8006            NaN  0.9894       0.2153       0.5385 0.0395                0.4386
+                  Music      21   4999      0.0058     0.5223          0.5523          0.4177        0.4860            NaN  0.0059       0.0000       0.0345 0.3255                0.4138
+                  Noise      19   4560      0.0349     0.6481          0.8089          0.5784        0.5561            NaN  0.1656       0.1195       0.3585 0.0329                0.0300
+        Dev (tham khảo)      43   9529      0.3064     0.8431          0.7528          0.8716        0.5785            NaN  0.7598       0.4014       0.4774 0.1850                0.1980
+Cả 144 file (tham khảo)     144  33185      0.3117     0.8453          0.7319          0.8811        0.5733            NaN  0.7772       0.4454       0.5253 0.1801                0.1812
+
+=== Ngưỡng: chọn ở đâu -> kết quả trên test ===
+                Ngưỡng_chọn_từ Cấu_hình    thr     MR    FAR  Precision  Recall     F1    DCF
+Youden điểm thô – val tổng hợp       A0 0.4373 0.3817 0.1604     0.6381  0.6183 0.6280 0.3264
+     DCF-min A0 – val tổng hợp       A0 0.1700 0.2807 0.2402     0.5780  0.7193 0.6409 0.2706
+     DCF-min A4 – val tổng hợp       A4 0.2600 0.3187 0.2173     0.5892  0.6813 0.6319 0.2933
+      F1-max A4 – val tổng hợp       A4 0.7200 0.4096 0.1244     0.6846  0.5904 0.6340 0.3383
+         Youden điểm thô – dev       A0 0.1438 0.2586 0.2583     0.5676  0.7414 0.6430 0.2585
+              DCF-min A0 – dev       A0 0.0100 0.0349 0.6629     0.3997  0.9651 0.5653 0.1919
+               F1-max A4 – dev       A4 0.2900 0.3324 0.2079     0.5949  0.6676 0.6291 0.3013
+ DCF-min A4 – dev (dùng chính)       A4 0.0200 0.0515 0.6053     0.4175  0.9485 0.5798 0.1899
+
+=== Tầng B (A4) ===
+  TP  FN   FP   TN     MR    FAR  Precision  Recall     F1  Specificity    DCF                      Chế độ
+7042 382 9826 6406 0.0515 0.6053     0.4175  0.9485 0.5798       0.3947 0.1899            Strict (mọi bin)
+5812 213 8719 6231 0.0354 0.5832     0.4000  0.9646 0.5655       0.4168 0.1723 Collar ±1 bin (bỏ bin biên)
+1230 169 1107  175 0.1208 0.8635     0.5263  0.8792 0.6585       0.1365 0.3065                Chỉ bin biên
+
+=== Chỉ số theo đoạn (test, A4) ===
+              Ngưỡng  thr  event_F1  onset_F1  n_gt_seg  n_pred_seg  n_fragmented  n_overmerged
+         DCF-min dev 0.02    0.0560    0.1400       777         937            26           112
+          F1-max dev 0.29    0.0719    0.1753       777         558            33            48
+DCF-min val tổng hợp 0.26    0.0775    0.1683       777         590            35            46
+
+=== Ablation ===
+Cấu_hình                         Mô_tả  Ngưỡng_dev     MR    FAR  F1_strict  F1_nb    DCF  FEC  MSC  OVER   NDS
+      A0 Điểm bin thô, không hậu xử lý        0.01 0.0349 0.6629     0.5653 0.5463 0.1919  110  149  1150  9611
+      A1               Rescore + rebin        0.01 0.0287 0.6874     0.5591 0.5390 0.1934   90  123  1186  9972
+      A2               + pad 100/120ms        0.02 0.0535 0.6007     0.5807 0.5668 0.1903  175  222  1101  8649
+      A3                + merge <500ms        0.01 0.0260 0.6937     0.5581 0.5373 0.1929   80  113  1189 10071
+      A4      + pad + merge (hiện tại)        0.02 0.0515 0.6053     0.5798 0.5655 0.1899  169  213  1107  8719
+
+=== Category (test, A4) ===
+Category  n_file  pct_speech     MR    FAR  Precision  FEC  MSC  OVER  NDS  F1_strict  F1_nb  F1_CI_lo  F1_CI_hi  FAR_CI_lo  FAR_CI_hi
+     Asm      21      0.3087 0.1992 0.4805     0.4267  135  175   433 1241     0.5567 0.5213    0.4060    0.6815     0.3976     0.5617
+  Babble      19      0.3289 0.0007 0.8397     0.3684    1    0   293 2133     0.5383 0.5156    0.3407    0.7061     0.7329     0.9413
+   Clean      21      0.8973 0.0005 0.8545     0.9109    1    1   292  125     0.9531 0.9840    0.9372    0.9678     0.7545     0.9401
+   Music      21      0.0058 0.1034 0.8127     0.0064    2    1    29 4010     0.0127 0.0010    0.0045    0.0249     0.7055     0.9083
+   Noise      19      0.0349 0.4151 0.2886     0.0682   30   36    60 1210     0.1222 0.0532    0.0502    0.1924     0.1816     0.3884
+
+Top đoạn nghi nhãn sai:
+             file category split  start   end  n_bins         GT  score  l2_speech  khac_alt
+Music_rxovPkgqOXc    Music  test   13.0  23.5      21 non-speech  0.962        NaN     False
+Music_Em7vc8NWUNY    Music   dev  102.0 112.0      20 non-speech  0.959        NaN     False
+Music_tzGfiZ2RI10    Music   dev    9.5  18.5      18 non-speech  0.980        NaN     False
+Music_tzGfiZ2RI10    Music   dev   45.5  54.5      18 non-speech  0.977        NaN     False
+Music_X-yIEMduRXk    Music  test   70.5  78.5      16 non-speech  0.973        NaN     False
+Music_tzGfiZ2RI10    Music   dev  112.5 120.0      15 non-speech  0.976        NaN     False
+Music_Em7vc8NWUNY    Music   dev    3.5  11.0      15 non-speech  0.958        NaN     False
+Music_tzGfiZ2RI10    Music   dev   29.5  37.0      15 non-speech  0.968        NaN     False
+Music_hnjGqS1Doto    Music   dev   22.0  29.0      14 non-speech  0.964        NaN     False
+  Asm_3OfnqBTIGs4      Asm  test   57.5  64.5      14     speech  0.012        NaN     False
+Music_rxovPkgqOXc    Music  test   56.5  63.5      14 non-speech  0.979        NaN     False
+Music_tzGfiZ2RI10    Music   dev  100.0 107.0      14 non-speech  0.963        NaN     False
+  Asm_jGAaWXOnFTw      Asm  test   90.5  97.5      14     speech  0.021        NaN     False
+Music_X-yIEMduRXk    Music  test   36.5  43.0      13 non-speech  0.969        NaN     False
+Music_tzGfiZ2RI10    Music   dev   70.0  76.5      13 non-speech  0.964        NaN     False
