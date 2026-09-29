@@ -46,6 +46,9 @@ labc = pd.read_csv(XD / "label_counts.csv") if HAS_L2 else None
 dls, grid, shift = pd.read_csv(XD / "deltas.csv"), pd.read_csv(R / "grid_dev.csv"), pd.read_csv(R / "shift_sweep.csv")
 tA, cat, evt = pd.read_csv(R / "tierA.csv"), pd.read_csv(R / "category.csv"), pd.read_csv(R / "event_by_threshold.csv")
 sus, struct = pd.read_csv(R / "suspicious.csv"), pd.read_csv(R / "structure.csv")
+HAS_PROF = (R / "dataset_profile.csv").exists()     # đặc trưng tập theo độ phân giải model (kết quả cũ không có)
+prof, seg_hist, frac_hist = ((pd.read_csv(R / n) for n in ("dataset_profile.csv", "seg_gap_hist.csv", "window_frac_hist.csv"))
+                             if HAS_PROF else (None, None, None))
 THR = S["thr_used"]; TODAY = date.today().strftime("%d/%m/%Y")
 SRC = (f"Nguồn: {R.as_posix()}/ (evaluate_real.py, {TODAY}). {S['n_pairs']} file; {META['mo_ta_nhan']}. "
        "Python reference, chưa phải output lib.")
@@ -58,9 +61,10 @@ P, D3, NA = "0.0%", "0.000", "—"
 
 wb = load_workbook(a.template)
 NEW = ["KQ du lieu that", "Hinh du lieu that", "DL quet nguong", "DL ROC", "DL theo file", "DL nhan va phan bo", "DL do lech bien"]
-for n in NEW + ["Bieu do du lieu that", "DL doan va timeline"]:
+for n in NEW + ["Bieu do du lieu that", "DL doan va timeline", "Dac trung tap danh gia"]:
     if n in wb.sheetnames: del wb[n]
 kq, hd, dq, dr, dfs, dn, dt = (wb.create_sheet(n) for n in NEW)
+dct = wb.create_sheet("Dac trung tap danh gia") if HAS_PROF else None
 KQ, DQ, DR, DF, DN, DT = (f"'{s.title}'" for s in (kq, dq, dr, dfs, dn, dt))   # tên sheet có dấu cách -> để trong nháy
 
 
@@ -120,8 +124,18 @@ DF0, DF1 = 5, 4 + len(pf)
 for i, row in enumerate(pf.itertuples(index=False), DF0):
     for j, (k, _, fmt) in enumerate(fcols, 1): raw(dfs, i, j, getattr(row, k), fmt)
     raw(dfs, i, 16, f"=IF(OR(E{i}=0,E{i}=1),1,0)", blue=False); raw(dfs, i, 17, f"=IF(OR(E{i}<0.1,E{i}>0.9),1,0)", blue=False)
+# cột R trở đi: đặc trưng theo độ phân giải model (per_file.csv mới); để sau P–Q để không đổi địa chỉ cột cũ
+pcols = [c for c in [("pct_seg_lt_win", "% đoạn speech < 0.96 s", P), ("pct_gap_lt_win", "% khoảng lặng < 0.96 s", P),
+                     ("pct_gap_filled_pp", "% khoảng lặng bị pad + merge lấp", P), ("pct_win_mixed", "% cửa sổ lẫn", P),
+                     ("pct_bin_near_trans", "% bin cách biên ≤ 0.48 s", P), ("trans_per_min", "Chuyển trạng thái / phút", "0.0"),
+                     ("oracle_F1_A0", "Trần F1 oracle A0", D3), ("oracle_F1_A4", "Trần F1 oracle A4", D3),
+                     ("oracle_err_A4", "% bin oracle A4 sai", P), ("pct_bin_low_cov", "% bin < 6 cửa sổ", P)] if c[0] in pf.columns]
+if pcols:
+    head(dfs, 4, [c[1] for c in pcols], c0=18)
+    for i, row in enumerate(pf.itertuples(index=False), DF0):
+        for j, (k, _, fmt) in enumerate(pcols, 18): raw(dfs, i, j, getattr(row, k), fmt)
 dfs.column_dimensions["A"].width = 24
-for c in range(2, 18): dfs.column_dimensions[L(c)].width = 12
+for c in range(2, 18 + len(pcols)): dfs.column_dimensions[L(c)].width = 12
 dfs.freeze_panes = "B5"
 def DFc(col): return rg(DF, col, DF0, DF1)
 
@@ -416,12 +430,110 @@ for r_, row in enumerate(sus.head(30).itertuples(index=False), r + 2):
     for k, (col, _, fmt) in enumerate(scol, 1): w(kq, r_, k, getattr(row, col), fmt, blue=True, left=k == 1)
 kq.freeze_panes = "B5"
 
+# ======================= Dac trung tap danh gia (nếu evaluate_real.py có xuất) =======================
+if HAS_PROF:
+    from openpyxl.formatting.rule import FormulaRule
+    FG = S.get("profile_fill_gap_s", PR("merge_gap", 0.5) + PR("pad_pre", 0.1) + PR("pad_post", 0.12))
+    title(dct, "Đặc trưng tập đánh giá theo độ phân giải model",
+          f"{SRC} Nhãn bin 0.5 s; model cửa sổ 0.96 s, hop 0.08 s (lưới chung 0.02 s). Chỉ tính từ nhãn và vị trí cửa sổ, không dùng "
+          "điểm model. Chữ xanh = số từ Python; cột dev − test là công thức, chữ đỏ khi lệch > 10 điểm %.")
+    FEAT = [  # (cột dataset_profile.csv, tên, ý nghĩa, định dạng); "" = dòng tiêu đề nhóm
+        ("", "Cỡ mẫu", "", None),
+        ("n_file", "Số file", "", None), ("minutes", "Thời lượng (phút)", "", "0.0"), ("n_bin", "Số bin 0.5 s", "", None),
+        ("n_win_indep", "Số cửa sổ 0.96 s không chồng nhau", "thời lượng / 0.96 s: cỡ mẫu độc lập ở độ phân giải model", "0"),
+        ("pct_speech", "% bin speech", "", P),
+        ("trans_per_min", "Số lần chuyển trạng thái / phút", "càng cao càng nhiều bin sát biên", "0.0"),
+        ("", "Đoạn speech so với cửa sổ", "", None),
+        ("n_seg", "Số đoạn speech", "cỡ mẫu cho event-F1", None),
+        ("seg_lt_win", "% đoạn < 0.96 s", "ngắn hơn cửa sổ: không cửa sổ nào nằm trọn trong đoạn", P),
+        ("seg_win_146", "% đoạn 0.96–1.46 s", "chứa được 1 cửa sổ, chưa đủ cửa sổ + 1 bin", P),
+        ("seg_146_2", "% đoạn 1.46–2 s", "", P), ("seg_ge_2", "% đoạn ≥ 2 s", "đủ dài: có bin ở giữa không bị biên ảnh hưởng", P),
+        ("speech_time_in_short_seg", "% thời gian speech trong đoạn < 0.96 s", "phần speech model khó thấy trọn", P),
+        ("median_seg_s", "Trung vị độ dài đoạn (s)", "", "0.00"),
+        ("seg_dropped_pp", "% đoạn bị drop", "đoạn + pad ngắn hơn --drop (0 khi không dùng drop)", P),
+        ("", "Khoảng lặng giữa hai đoạn speech", "", None),
+        ("n_gap", "Số khoảng lặng", "", None),
+        ("gap_lt_win", "% khoảng lặng < 0.96 s", "ngắn hơn cửa sổ", P), ("gap_win_146", "% khoảng lặng 0.96–1.46 s", "", P),
+        ("gap_146_2", "% khoảng lặng 1.46–2 s", "", P), ("gap_ge_2", "% khoảng lặng ≥ 2 s", "", P),
+        ("gap_filled_pp", f"% khoảng lặng < {FG:g} s (pad + merge lấp)", "model đúng hoàn toàn vẫn bị tính FA ở A2–A4", P),
+        ("median_gap_s", "Trung vị độ dài khoảng lặng (s)", "", "0.00"),
+        ("", "Cửa sổ 0.96 s theo tỉ lệ speech của nhãn", "", None),
+        ("win_pure_speech", "% cửa sổ thuần speech", "", P), ("win_pure_ns", "% cửa sổ thuần non-speech", "", P),
+        ("win_mixed", "% cửa sổ lẫn", "chứa cả speech lẫn non-speech: điểm tuỳ cách model hiểu nhãn cửa sổ", P),
+        ("", "Khoảng cách từ tâm bin tới chuyển trạng thái gần nhất", "", None),
+        ("bin_dist_le_048", "% bin ≤ 0.48 s", "bin biên: cửa sổ đặt tâm trong bin (A0) đã chứa biên", P),
+        ("bin_dist_048_096", "% bin 0.48–0.96 s", "A0 không chạm biên; A1–A4 (gộp cửa sổ quanh hop) còn chạm", P),
+        ("bin_dist_096_144", "% bin 0.96–1.44 s", "chỉ A1–A4 có làm mượt còn chạm biên", P),
+        ("bin_dist_gt_144", "% bin > 1.44 s", "xa biên: không cửa sổ nào góp vào điểm bin chứa biên", P),
+        ("bin_low_cov", "% bin < 6 tâm cửa sổ", "đầu / cuối file: điểm A0 dựa trên ít cửa sổ hoặc nội suy", P),
+        ("", "Trần oracle: model hoàn hảo cùng cửa sổ 0.96 s (điểm = tỉ lệ speech, ngưỡng 0.5)", "", None)]
+    for mode, desc in (("A0", "điểm bin thô"), ("A4", "hậu xử lý hiện tại")):
+        FEAT += [(f"oracle_{mode}_F1", f"Oracle {mode} F1", f"{desc}; < 1 là phần mất do độ phân giải, không phải lỗi model", D3),
+                 (f"oracle_{mode}_MR", f"Oracle {mode} MR", "", P), (f"oracle_{mode}_FAR", f"Oracle {mode} FAR", "", P),
+                 (f"oracle_{mode}_DCF", f"Oracle {mode} DCF", f"trọng số miss {PR('dcf_miss', 0.75)} (Python, không theo ô B6)", D3),
+                 (f"oracle_{mode}_err", f"Oracle {mode} % bin sai", "", P)]
+    pv = prof.set_index(["Category", "split"]); PC = list(dict.fromkeys(prof.Category)); TAPS = ["dev", "test", "tất cả"]
+    r = 4; sec(dct, r, "a. Đặc trưng theo category × tập (số gộp từ số đếm, không trung bình theo file)")
+    head(dct, r + 1, ["Đặc trưng", "Ý nghĩa"] + [f"{c}\n{t}" for c in PC for t in TAPS + ["dev − test"]])
+    red = Font(name=F, size=10, bold=True, color="C00000")
+    for i, (k, name, desc, fmt) in enumerate(FEAT, r + 2):
+        if not k:
+            sec(dct, i, name); continue
+        w(dct, i, 1, name, left=True); w(dct, i, 2, desc, left=True)
+        for j, c in enumerate(PC):
+            c0 = 3 + 4 * j
+            for t_, tap in enumerate(TAPS):
+                w(dct, i, c0 + t_, pv.at[(c, tap), k] if (c, tap) in pv.index else None, fmt, blue=True)
+            if k in ("n_file", "minutes", "n_bin", "n_win_indep", "n_seg", "n_gap"):
+                w(dct, i, c0 + 3, None); continue
+            dv, tv = f"{L(c0)}{i}", f"{L(c0 + 1)}{i}"
+            w(dct, i, c0 + 3, f'=IF(OR({dv}="",{tv}=""),"",{dv}-{tv})', fmt)
+            if fmt == P:
+                dct.conditional_formatting.add(f"{L(c0 + 3)}{i}", FormulaRule(formula=[f"AND(ISNUMBER({L(c0 + 3)}{i}),ABS({L(c0 + 3)}{i})>0.1)"], font=red))
+    r = r + 2 + len(FEAT) + 1
+    sec(dct, r, "b. Phân bố độ dài đoạn speech / khoảng lặng (số đoạn theo độ dài, toàn bộ file); nhãn theo bin nên độ dài là bội của 0.5 s")
+    LCOL = [c for c in seg_hist.columns if c not in ("Category", "kind", "n")]; nL = len(LCOL)
+    head(dct, r + 1, ["Category", "Loại", "Số đoạn"] + [f"{c} s" for c in LCOL] + [f"% {c} s" for c in LCOL])
+    for i, (_, row) in enumerate(seg_hist.iterrows(), r + 2):
+        w(dct, i, 1, row["Category"], left=True); w(dct, i, 2, row["kind"], left=True); w(dct, i, 3, row["n"], blue=True)
+        for j, c in enumerate(LCOL):
+            w(dct, i, 4 + j, row[c], blue=True); w(dct, i, 4 + nL + j, f'=IF($C{i}=0,"",{L(4 + j)}{i}/$C{i})', P)
+    r = r + 2 + len(seg_hist) + 1
+    sec(dct, r, "c. Cửa sổ 0.96 s theo tỉ lệ speech của nhãn trong cửa sổ (toàn bộ file)")
+    FCOL = [c for c in frac_hist.columns if c not in ("Category", "n_win")]; nF = len(FCOL)
+    head(dct, r + 1, ["Category", "", "Số cửa sổ"] + FCOL + [f"% {c}" for c in FCOL])
+    for i, (_, row) in enumerate(frac_hist.iterrows(), r + 2):
+        w(dct, i, 1, row["Category"], left=True); w(dct, i, 2, None); w(dct, i, 3, row["n_win"], blue=True)
+        for j, c in enumerate(FCOL):
+            w(dct, i, 4 + j, row[c], blue=True); w(dct, i, 4 + nF + j, f'=IF($C{i}=0,"",{L(4 + j)}{i}/$C{i})', P)
+    r = r + 2 + len(frac_hist) + 1
+    sec(dct, r, "d. Thang thời gian dùng ở trên")
+    for i, t in enumerate([
+            "0.5 s = bin nhãn (độ phân giải của nhãn); 0.08 s = hop model; 0.96 s = cửa sổ model; lưới chung 0.02 s nên mọi tỉ lệ đều chính xác.",
+            "Đoạn / khoảng lặng < 0.96 s: không cửa sổ nào nằm trọn bên trong -> model không bao giờ thấy 'thuần' đoạn đó.",
+            "0.96–1.46 s: chứa được 1 cửa sổ nhưng chưa đủ cửa sổ + 1 bin; ≥ 2 s: có bin ở giữa không chịu ảnh hưởng của biên.",
+            f"Khoảng lặng < merge gap + pad trước + pad sau = {FG:g} s bị hậu xử lý lấp kể cả khi model đúng hoàn toàn.",
+            "Khoảng cách tới biên: A0 gộp các cửa sổ có tâm trong bin (tầm ±0.73 s quanh tâm bin); A1–A4 gộp cửa sổ quanh từng hop "
+            "rồi làm mượt (tầm tới ~1.4 s).",
+            "Trần oracle: điểm mỗi cửa sổ = tỉ lệ speech thật trong cửa sổ, qua đúng pipeline A0 / A4 ở ngưỡng 0.5. "
+            "Khoảng cách giữa kết quả model và trần này mới là phần model có thể cải thiện."], r + 1):
+        c = dct.cell(i, 1, t); c.font = FN_
+    dct.column_dimensions["A"].width = 40; dct.column_dimensions["B"].width = 52
+    for c in range(3, 3 + max(4 * len(PC), 3 + 2 * max(nL, nF))): dct.column_dimensions[L(c)].width = 10
+    if (R / "fig6_do_dai_doan.png").exists():
+        r = r + 8; sec(dct, r, "e. Độ dài đoạn speech / khoảng lặng so với frame 0.5 s (hình Python, fig6_do_dai_doan.png)")
+        img = XLImage(str(R / "fig6_do_dai_doan.png")); k = 1100 / img.width; img.width, img.height = 1100, int(img.height * k)
+        dct.add_image(img, f"A{r + 1}")
+    dct.freeze_panes = "C6"
+
 # ======================= Hinh du lieu that (vẽ bằng Python) =======================
 title(hd, "Hình – đánh giá (vẽ bằng Python)",
       f"{SRC} Hình cố định ở ngưỡng Python {THR} (A4); đổi tham số ở KQ du lieu that không đổi hình – chạy lại evaluate_real.py.")
 r = 4
 for f, t in [("fig1_kiem_tra_du_lieu.png", "Hình 1. Kiểm tra dữ liệu"), ("fig2_tang_A.png", "Hình 2. Tầng A (test)"),
-             ("fig3_tang_B.png", "Hình 3. Ngưỡng và tầng B"), ("fig4_timeline.png", "Hình 4. Timeline mẫu (test)")]:
+             ("fig3_tang_B.png", "Hình 3. Ngưỡng và tầng B"), ("fig4_timeline.png", "Hình 4. Timeline mẫu (test)"),
+             ("fig5_dac_trung_tap.png", "Hình 5. Đặc trưng tập theo độ phân giải model"),
+             ("fig6_do_dai_doan.png", "Hình 6. Độ dài đoạn speech / khoảng lặng so với frame 0.5 s")]:
     if not (R / f).exists(): continue
     sec(hd, r, t)
     img = XLImage(str(R / f)); k = 1100 / img.width; img.width, img.height = 1100, int(img.height * k)
@@ -592,7 +704,8 @@ info = [("Model", META["mo_ta_model"] + (f"; head: {a.run.as_posix()}/best" if a
         ("Val tổng hợp", f"{S['n_synth_val']} file syn_val" if HAS_SYN else "Không có – chỉ chọn ngưỡng trên dev"),
         ("Loại số liệu", "Python reference – CHƯA phải output lib.so; Parity, hiệu năng, robustness chưa đo"),
         ("Ngưỡng dùng", f'=FIXED({KQ}!$B$11,2)&" ("&{KQ}!$B$8&" trên dev, "&{KQ}!$B$7&") – chỉnh ở KQ du lieu that, mục Tham số"'),
-        ("Sheet thêm", "KQ du lieu that (chỉ số = công thức), Hinh du lieu that (hình Python), DL … (số đếm thô từ Python, chữ xanh)")]
+        ("Sheet thêm", "KQ du lieu that (chỉ số = công thức), Hinh du lieu that (hình Python), DL … (số đếm thô từ Python, chữ xanh)"
+         + (", Dac trung tap danh gia (đặc trưng tập theo độ phân giải model)" if HAS_PROF else ""))]
 for i, (k, v) in enumerate(info, 1):
     ws.cell(r0 + i, 1, k).font = Font(name=F, size=11, bold=True)
     c = ws.cell(r0 + i, 2, v); c.font = Font(name=F, size=11); c.alignment = Alignment(wrap_text=True, vertical="top")

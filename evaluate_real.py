@@ -369,6 +369,101 @@ if not dev or not test:
 CATS_T = [c for c in CATS if any(recs[f]["category"] == c for f in test)]          # category có file test
 S.update(n_dev=len(dev), n_test=len(test), pct_speech_dev=float(cat_(dev, "y").mean()), pct_speech_test=float(cat_(test, "y").mean()))
 
+# =============== 2b. Đặc trưng tập theo độ phân giải model (chỉ từ nhãn + lưới cửa sổ, không dùng điểm model) ===============
+# thang thời gian: nhãn bin 0.5 s, cửa sổ 0.96 s, bin + cửa sổ 1.46 s; lưới chung 0.02 s (vadlib.FINE)
+FILL_GAP = A.merge_gap + A.pad_pre + A.pad_post           # khoảng lặng ngắn hơn -> pad + merge lấp kể cả khi model đúng
+LEN_EDGES, LEN_CLS = [WIN, WIN + BIN, 2.0], ["< 0.96 s", "0.96–1.46 s", "1.46–2 s", "≥ 2 s"]
+LEN_KEY = ["lt_win", "win_146", "146_2", "ge_2"]
+DIST_EDGES, DIST_CLS = [HALF_WIN, WIN, WIN + HALF_WIN], ["≤ 0.48 s", "0.48–0.96 s", "0.96–1.44 s", "> 1.44 s"]
+DIST_KEY = ["le_048", "048_096", "096_144", "gt_144"]
+FRAC_CLS = ["0", "(0, .25]", "(.25, .5)", "[.5, .75)", "[.75, 1)", "1"]
+HIST_LEN = np.arange(1, 11) * BIN                           # cột bảng phân bố độ dài: 0.5 … 4.5 s, cột cuối = ≥ 5 s
+MIN_COV = int(BIN / HOP + 1e-9)                             # bin đủ cửa sổ: >= 6 tâm cửa sổ
+def len_cls(L): return np.searchsorted(LEN_EDGES, np.asarray(L, float) + 1e-9, side="right")
+def frac_cls(f): return np.select([f <= 0, f <= .25, f < .5, f < .75, f < 1], [0, 1, 2, 3, 4], 5)
+def counts4(y, p): return [int(((y == 1) & (p == 1)).sum()), int(((y == 1) & (p == 0)).sum()),
+                           int(((y == 0) & (p == 1)).sum()), int(((y == 0) & (p == 0)).sum())]
+prof_rows, runs, fracs = [], {}, {}
+for f, d in recs.items():
+    y, n, m = d["y"], d["n"], d["m"]
+    sp, gp = (np.array(v, float) for v in run_lengths(y)); runs[f] = (sp, gp)
+    wf = window_frac(m, y); wf = wf[~np.isnan(wf)]; fracs[f] = wf
+    om = oracle_model(m, y)
+    orc = dict(n=n, braw=bin_scores(om, n), fr=rescore_hop(om, dur=n * BIN, weight=A.overlap, smooth=A.smooth))
+    r = dict(file=f, category=d["category"], split=split[f], n_bin=n, dur_s=n * BIN, speech_bins=int(y.sum()), speech_s=y.sum() * BIN,
+             n_trans=int((y[1:] != y[:-1]).sum()), n_seg=len(sp), n_gap=len(gp), n_win=len(wf),
+             gap_filled=int((gp < FILL_GAP - 1e-9).sum()), seg_dropped=int((sp + A.pad_pre + A.pad_post < A.drop - 1e-9).sum()),
+             win_ns=int((wf == 0).sum()), win_mixed=int(((wf > 0) & (wf < 1)).sum()), win_sp=int((wf == 1).sum()),
+             low_cov=int((centers_per_bin(m, n) < MIN_COV).sum()))
+    for i, k in enumerate(LEN_KEY):
+        r[f"seg_{k}"] = int((len_cls(sp) == i).sum()); r[f"gap_{k}"] = int((len_cls(gp) == i).sum())
+    r["seg_s_lt_win"] = float(sp[len_cls(sp) == 0].sum())
+    dc = np.searchsorted(DIST_EDGES, dist_to_transition(y) - 1e-9)
+    for i, k in enumerate(DIST_KEY): r[f"bin_{k}"] = int((dc == i).sum())
+    for mode in ("A0", "A4"):
+        r.update(zip([f"o{mode}_{x}" for x in ("TP", "FN", "FP", "TN")], counts4(y, pred_cached(orc, 0.5, mode))))
+    prof_rows.append(r)
+prof = pd.DataFrame(prof_rows)
+assert (prof.win_ns + prof.win_mixed + prof.win_sp == prof.n_win).all() and np.allclose(prof.speech_s, [runs[f][0].sum() for f in prof.file])
+
+def prof_summary(g, cat, tap):
+    """Đặc trưng gộp (cộng số đếm, không trung bình theo file) của nhóm file g."""
+    s = g.drop(columns=["file", "category", "split"]).sum()
+    def pc(a, b): return s[a] / s[b] if s[b] else np.nan
+    sp = np.concatenate([runs[f][0] for f in g.file]); gp = np.concatenate([runs[f][1] for f in g.file])
+    r = dict(Category=cat, split=tap, n_file=len(g), minutes=s.dur_s / 60, n_bin=int(s.n_bin), n_win=int(s.n_win),
+             n_win_indep=s.dur_s / WIN, pct_speech=pc("speech_bins", "n_bin"), trans_per_min=s.n_trans / (s.dur_s / 60),
+             n_seg=int(s.n_seg), **{f"seg_{k}": pc(f"seg_{k}", "n_seg") for k in LEN_KEY},
+             speech_time_in_short_seg=pc("seg_s_lt_win", "speech_s"), median_seg_s=float(np.median(sp)) if len(sp) else np.nan,
+             n_gap=int(s.n_gap), **{f"gap_{k}": pc(f"gap_{k}", "n_gap") for k in LEN_KEY},
+             gap_filled_pp=pc("gap_filled", "n_gap"), median_gap_s=float(np.median(gp)) if len(gp) else np.nan,
+             seg_dropped_pp=pc("seg_dropped", "n_seg"),
+             win_pure_speech=pc("win_sp", "n_win"), win_pure_ns=pc("win_ns", "n_win"), win_mixed=pc("win_mixed", "n_win"),
+             **{f"bin_dist_{k}": pc(f"bin_{k}", "n_bin") for k in DIST_KEY}, bin_low_cov=pc("low_cov", "n_bin"))
+    for mode in ("A0", "A4"):
+        tp, fn, fp, tn = (s[f"o{mode}_{x}"] for x in ("TP", "FN", "FP", "TN"))
+        mr = fn / (tp + fn) if tp + fn else np.nan; far = fp / (fp + tn) if fp + tn else np.nan
+        r.update({f"oracle_{mode}_MR": mr, f"oracle_{mode}_FAR": far, f"oracle_{mode}_F1": 2 * tp / (2 * tp + fp + fn) if tp + fp + fn else np.nan,
+                  f"oracle_{mode}_DCF": A.dcf_miss * mr + (1 - A.dcf_miss) * far, f"oracle_{mode}_err": (fp + fn) / s.n_bin})
+    return r
+TAPS = [("dev", "dev"), ("test", "test"), ("tất cả", None)]
+profile = pd.DataFrame([prof_summary(g_, c, tap) for c, gc in [(c, prof[prof.category == c]) for c in CATS] + [("Tất cả", prof)]
+                        for tap, sv in TAPS for g_ in [gc if sv is None else gc[gc.split == sv]] if len(g_)])
+# phân bố độ dài đoạn / khoảng lặng (số đoạn theo độ dài, cột cuối = ≥ 5 s) và tỉ lệ speech trong cửa sổ, toàn bộ file
+def len_bucket(L): return np.minimum(np.round(L / BIN).astype(int), len(HIST_LEN)) - 1   # cột 0.5 s … ≥ 5 s
+hist_rows, frac_rows, hist_len = [], [], {}                 # hist_len[(category, kind)] = độ dài từng đoạn (s), cho Hình 6
+for c, fs in [(c, list(prof.file[prof.category == c])) for c in CATS] + [("Tất cả", list(prof.file))]:
+    for i, kind in enumerate(("speech", "khoảng lặng")):
+        L = hist_len[(c, kind)] = np.concatenate([runs[f][i] for f in fs]); k = len_bucket(L)
+        hist_rows.append(dict(Category=c, kind=kind, n=len(L), **{("≥ 5" if j == len(HIST_LEN) - 1 else f"{v:g}"): int((k == j).sum())
+                                                                 for j, v in enumerate(HIST_LEN)}))
+    fc = frac_cls(np.concatenate([fracs[f] for f in fs]))
+    frac_rows.append(dict(Category=c, n_win=len(fc), **{lab: int((fc == j).sum()) for j, lab in enumerate(FRAC_CLS)}))
+seg_hist, frac_hist = pd.DataFrame(hist_rows), pd.DataFrame(frac_rows)
+# thêm cột % theo file vào per_file.csv
+q = prof.set_index("file"); nz = lambda s: s.where(s > 0)
+pf_prof = pd.DataFrame(dict(pct_seg_lt_win=q.seg_lt_win / nz(q.n_seg), pct_gap_lt_win=q.gap_lt_win / nz(q.n_gap),
+                            pct_gap_filled_pp=q.gap_filled / nz(q.n_gap), pct_win_mixed=q.win_mixed / nz(q.n_win),
+                            pct_bin_near_trans=q.bin_le_048 / q.n_bin, trans_per_min=q.n_trans / (q.dur_s / 60),
+                            **{f"oracle_F1_{mode}": 2 * q[f"o{mode}_TP"] / nz(2 * q[f"o{mode}_TP"] + q[f"o{mode}_FP"] + q[f"o{mode}_FN"])
+                               for mode in ("A0", "A4")},
+                            oracle_err_A4=(q.oA4_FP + q.oA4_FN) / q.n_bin, pct_bin_low_cov=q.low_cov / q.n_bin))
+pf = pf.merge(pf_prof, left_on="file", right_index=True, how="left")
+# dev vs test: đặc trưng lệch > 10 điểm %
+FLAG_KEYS = ["pct_speech", "seg_lt_win", "gap_lt_win", "gap_filled_pp", "win_mixed", "bin_dist_le_048", "oracle_A4_F1"]
+flags = []
+for c in CATS + ["Tất cả"]:
+    g = profile[profile.Category == c].set_index("split")
+    if not {"dev", "test"} <= set(g.index): continue
+    for k in FLAG_KEYS:
+        dv, tv = g.at["dev", k], g.at["test", k]
+        if pd.notna(dv) and pd.notna(tv) and abs(dv - tv) > 0.10: flags.append(f"{c}: {k} dev {dv:.0%} / test {tv:.0%}")
+PROF_KEYS = ["pct_speech", "trans_per_min", "seg_lt_win", "speech_time_in_short_seg", "gap_lt_win", "gap_filled_pp", "win_mixed",
+             "bin_dist_le_048", "oracle_A0_F1", "oracle_A4_F1", "oracle_A4_DCF", "oracle_A4_err"]
+S.update(profile={r.Category: {k: getattr(r, k) for k in PROF_KEYS} for r in profile[profile.split == "tất cả"].itertuples()},
+         profile_fill_gap_s=FILL_GAP, profile_devtest_flags=flags,
+         profile_len_classes=LEN_CLS, profile_dist_classes=DIST_CLS, profile_frac_classes=FRAC_CLS)
+
 # =============== 3. Nhất quán nhãn: người gán 2 vs nhãn cùng quy tắc ===============
 lab_cat = pd.DataFrame()
 if HAS_L2:
@@ -628,6 +723,8 @@ for name, df in (("label_agreement.csv", lab_cat if HAS_L2 else None), ("tierA_n
 tA.to_csv(OUT / "tierA.csv", index=False); tB.to_csv(OUT / "tierB.csv", index=False)
 thr_df.to_csv(OUT / "thr_sweep.csv", index=False); transfer.to_csv(OUT / "threshold_transfer.csv", index=False)
 ev_thr.to_csv(OUT / "event_by_threshold.csv", index=False)
+profile.to_csv(OUT / "dataset_profile.csv", index=False); seg_hist.to_csv(OUT / "seg_gap_hist.csv", index=False)
+frac_hist.to_csv(OUT / "window_frac_hist.csv", index=False)
 cat_df.to_csv(OUT / "category.csv", index=False); abl.to_csv(OUT / "ablation.csv", index=False); grid.to_csv(OUT / "grid_dev.csv", index=False)
 sus.to_csv(OUT / "suspicious.csv", index=False, encoding="utf-8-sig")
 json.dump(S, open(OUT / "summary.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=float)
@@ -724,6 +821,70 @@ if show:
         a_.set_title(f"{f}  AUC={safe_auc(y, d['braw']):.3f}  speech={y.mean():.0%}", fontsize=8, loc="left")
     axs[0].legend(fontsize=7, loc="upper right", ncol=3); axs[-1].set_xlabel("giây")
     plt.tight_layout(); plt.savefig(OUT / "fig4_timeline.png", dpi=130); plt.close()
+# Hình 5: đặc trưng tập theo độ phân giải model (toàn bộ file)
+pa = profile[profile.split == "tất cả"].set_index("Category"); GC = CATS + ["Tất cả"]
+gcol = {**COLS, "Tất cả": "#52514e"}; bw = 0.8 / len(GC)
+fig, ax = plt.subplots(2, 2, figsize=(14, 9))
+for a_, kind in ((ax[0, 0], "seg"), (ax[0, 1], "gap")):
+    for i, c in enumerate(GC):
+        lab = f"{c} (n={pa.at[c, f'n_{kind}']}" + (f", bị lấp {pa.at[c, 'gap_filled_pp']:.0%}" if kind == "gap" and pd.notna(pa.at[c, "gap_filled_pp"]) else "") + ")"
+        a_.bar(np.arange(4) + (i - (len(GC) - 1) / 2) * bw, [pa.at[c, f"{kind}_{k}"] for k in LEN_KEY], bw, color=gcol[c],
+               edgecolor="white", linewidth=0.6, label=lab)
+    a_.set_xticks(range(4)); a_.set_xticklabels(LEN_CLS); a_.legend(fontsize=7, loc="upper left")
+    a_.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1))
+ax[0, 0].set(title="Độ dài đoạn speech so với cửa sổ 0.96 s", ylabel="% số đoạn")
+ax[0, 1].set(title=f"Độ dài khoảng lặng giữa hai đoạn speech (< {FILL_GAP:g} s: pad + merge lấp)", ylabel="% số khoảng lặng")
+bot = np.zeros(len(GC))
+for k, lab, c_ in (("win_pure_ns", "thuần non-speech", C1), ("win_mixed", "lẫn (0 < tỉ lệ < 1)", C2), ("win_pure_speech", "thuần speech", C3)):
+    v = pa.loc[GC, k].to_numpy(float); ax[1, 0].bar(range(len(GC)), v, 0.6, bottom=bot, color=c_, edgecolor="white", linewidth=1.5, label=lab)
+    if k == "win_mixed":
+        for i, x in enumerate(v):
+            if x >= 0.03: ax[1, 0].text(i, bot[i] + x / 2, f"{x:.0%}", ha="center", va="center", fontsize=7, color="white")
+    bot += v
+ax[1, 0].set_xticks(range(len(GC))); ax[1, 0].set_xticklabels(GC); ax[1, 0].set_ylim(0, 1.13)
+ax[1, 0].legend(fontsize=7, loc="upper center", ncol=3); ax[1, 0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1))
+ax[1, 0].set(title="Cửa sổ 0.96 s theo tỉ lệ speech của nhãn", ylabel="% cửa sổ")
+for j, (mode, c_) in enumerate((("A0", C1), ("A4", C2))):
+    v = pa.loc[GC, f"oracle_{mode}_F1"].to_numpy(float)
+    ax[1, 1].bar(np.arange(len(GC)) + (j - 0.5) * 0.36, v, 0.36, color=c_, edgecolor="white", linewidth=1, label=f"oracle {mode}")
+    for i, x in enumerate(v):
+        if np.isfinite(x): ax[1, 1].text(i + (j - 0.5) * 0.36, x + 0.01, f"{x:.2f}", ha="center", fontsize=7)
+ax[1, 1].set_xticks(range(len(GC))); ax[1, 1].set_xticklabels(GC); ax[1, 1].set_ylim(0, 1.2)
+ax[1, 1].legend(fontsize=7, loc="upper center", ncol=2)
+ax[1, 1].set(title="Trần F1: model hoàn hảo cửa sổ 0.96 s (điểm = tỉ lệ speech, ngưỡng 0.5)", ylabel="F1 trên bin 0.5 s")
+plt.tight_layout(); plt.savefig(OUT / "fig5_dac_trung_tap.png", dpi=130); plt.close()
+# Hình 6: độ dài đoạn speech / khoảng lặng theo giây; nhãn theo bin nên mỗi bước 0.5 s = 1 frame (toàn bộ file)
+HCOL = [c for c in seg_hist.columns if c not in ("Category", "kind", "n")]; hx = np.arange(1, len(HCOL) + 1) * BIN
+fig, ax = plt.subplots(2, len(GC), figsize=(3.2 * len(GC), 8), sharex=True, sharey=True, squeeze=False)
+for i, (kind, ylab) in enumerate((("speech", "% đoạn speech"), ("khoảng lặng", "% khoảng lặng"))):
+    for j, c in enumerate(GC):
+        a_ = ax[i, j]; L = hist_len[(c, kind)]; n_, tot = len(L), L.sum()
+        p_ = np.bincount(len_bucket(L), minlength=len(HCOL)) / max(n_, 1)            # tỉ lệ số đoạn theo độ dài
+        t_ = np.bincount(len_bucket(L), L, len(HCOL)) / max(tot, 1e-9)               # tỉ lệ thời lượng theo độ dài
+        a_.bar(hx, p_, 0.4, color=gcol[c], edgecolor="white", linewidth=0.6)
+        if n_:
+            a_.plot(hx, np.cumsum(p_), "o-", c="#0b0b0b", lw=1, ms=2.5, label="% tích luỹ theo số đoạn")
+            a_.plot(hx, np.cumsum(t_), "s--", c="#4a3aa7", lw=1.2, ms=2.5, label="% tích luỹ theo thời lượng")
+        a_.axvline(BIN, ls="--", c="#8a8984", lw=1, label=f"1 frame = {BIN:g} s")
+        a_.axvline(WIN, ls=":", c="#e34948", lw=1.5, label=f"cửa sổ model {WIN:g} s")
+        sh = lambda thr: f"{(L < thr - 1e-9).mean():.0%} số đoạn · {L[L < thr - 1e-9].sum() / tot:.0%} thời lượng"
+        sub = f"< {WIN:g} s: {sh(WIN)}" if n_ else "không có"
+        if kind != "speech":
+            a_.axvline(FILL_GAP, ls="-.", c="#eda100", lw=1.2, label=f"pad + merge lấp (< {FILL_GAP:g} s)")
+            if n_: sub += f"\nbị lấp: {sh(FILL_GAP)}"
+        a_.set_title(f"{c} (n={n_})\n{sub}", fontsize=8.5)
+        if i == 0:
+            top = a_.secondary_xaxis("top", functions=(lambda s: s / BIN, lambda f: f * BIN))
+            top.set_xticks(hx / BIN); top.set_xticklabels([f"{k:g}" for k in hx[:-1] / BIN] + [f"≥{hx[-1] / BIN:g}"], fontsize=7)
+            top.set_xlabel(f"số frame {BIN:g} s", fontsize=7)
+    ax[i, 0].set_ylabel(ylab)
+for a_ in ax[1]:
+    a_.set_xticks(hx); a_.set_xticklabels(HCOL, fontsize=7); a_.set_xlabel("độ dài (s)")
+ax[0, 0].set_xlim(0.1, hx[-1] + 0.4); ax[0, 0].set_ylim(0, 1.08); ax[0, 0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1))
+fig.suptitle(f"Độ dài đoạn speech / khoảng lặng so với frame nhãn {BIN:g} s (1 cột = 1 frame; cột cuối = ≥ {hx[-1]:g} s). "
+             "Cột = % số đoạn; thời lượng tính trên tổng thời lượng các đoạn cùng loại", fontsize=11)
+fig.legend(*ax[1, -1].get_legend_handles_labels(), loc="lower center", ncol=5, fontsize=8)
+plt.tight_layout(rect=(0, 0.04, 1, 1)); plt.savefig(OUT / "fig6_do_dai_doan.png", dpi=130); plt.close()
 
 pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
 print("Dữ liệu:", json.dumps(S["meta"], ensure_ascii=False, indent=1))
@@ -735,6 +896,8 @@ print(json.dumps({k: S[k] for k in ["n_pairs", "problems", "n_struct_flag", "str
       ensure_ascii=False, indent=1, default=float)[:6000])
 for name, df in [("Nhất quán nhãn", lab_cat), ("Tầng A (nhãn chính)", tA), ("Tầng A (nhãn --gt-alt)", tA_alt),
                  ("Ngưỡng: chọn ở đâu -> kết quả trên test", transfer), ("Tầng B (A4)", tB), ("Chỉ số theo đoạn (test, A4)", ev_thr),
-                 ("Ablation", abl), ("Category (test, A4)", cat_df)]:
+                 ("Ablation", abl), ("Category (test, A4)", cat_df),
+                 ("Đặc trưng tập theo độ phân giải model (tất cả file)", profile[profile.split == "tất cả"][["Category", "n_file", "minutes"] + PROF_KEYS])]:
     if df is not None and len(df): print(f"\n=== {name} ==="); print(df.round(4).to_string(index=False))
+print("\nĐặc trưng lệch dev/test > 10 điểm %:", "; ".join(flags) if flags else "(không có)")
 print("\nTop đoạn nghi nhãn sai:"); print(sus.head(15).to_string(index=False) if len(sus) else "(không có)")

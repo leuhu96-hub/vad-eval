@@ -61,9 +61,111 @@ Kết quả:
     công thức tới KQ du lieu that; chỉ ghi ô vàng/xám, giữ nguyên công thức của template.
   - Số chỉ Python tính được (CI bootstrap, event-F1, Δbiên, AUC chính xác) giữ là số, chữ xanh, có ghi chú.
 
+## Đặc trưng tập đánh giá theo độ phân giải model
+
+Model cho điểm theo cửa sổ 0.96 s (hop 0.08 s), còn nhãn theo bin 0.5 s. evaluate_real.py (mục 2b) mô tả tập đánh giá
+theo thang thời gian này. Các đặc trưng chỉ tính từ nhãn và vị trí cửa sổ, không dùng điểm model. Lưới chung 0.02 s
+(0.5 = 25 ô, 0.08 = 4 ô, 0.96 = 48 ô) nên mọi tỉ lệ đều chính xác.
+
+| Nhóm | Đặc trưng | Ý nghĩa |
+|---|---|---|
+| Độ dài đoạn / khoảng lặng | % đoạn speech và khoảng lặng < 0.96 s, 0.96–1.46 s, 1.46–2 s, ≥ 2 s | < 0.96 s: không cửa sổ nào nằm trọn trong đoạn |
+| Hậu xử lý | % khoảng lặng < merge gap + pad (bị lấp), % đoạn bị drop | Lỗi vẫn bị tính kể cả khi model đúng hoàn toàn |
+| Độ thuần cửa sổ | % cửa sổ thuần speech / thuần non-speech / lẫn | Cửa sổ lẫn: điểm tuỳ cách model hiểu nhãn cửa sổ |
+| Khoảng cách tới biên | % bin cách chuyển trạng thái ≤ 0.48 / 0.48–0.96 / 0.96–1.44 / > 1.44 s | Vùng mà các cửa sổ góp vào điểm của bin có chứa biên |
+| Trần oracle | F1 / MR / FAR / DCF của model hoàn hảo cùng cửa sổ (điểm = tỉ lệ speech trong cửa sổ, ngưỡng 0.5) qua A0 và A4 | Mức tốt nhất đạt được với độ phân giải + hậu xử lý hiện tại |
+| Cỡ mẫu | Số bin, số cửa sổ không chồng, số đoạn, % bin < 6 tâm cửa sổ | Bin đầu/cuối file có điểm A0 dựa trên ít cửa sổ hoặc nội suy |
+| Dev / test | Mọi đặc trưng tính riêng cho dev và test | Lệch > 10 điểm % ghi vào `profile_devtest_flags` và tô đỏ trong Excel |
+
+Output: `dataset_profile.csv` (category × dev/test/tất cả), `seg_gap_hist.csv` (số đoạn theo độ dài),
+`window_frac_hist.csv` (số cửa sổ theo tỉ lệ speech), `fig5_dac_trung_tap.png`,
+`fig6_do_dai_doan.png` (độ dài đoạn speech / khoảng lặng theo giây, 1 cột = 1 frame 0.5 s; hai đường % tích luỹ
+theo số đoạn và theo thời lượng), các cột mới trong `per_file.csv`,
+khoá `profile*` trong summary.json. make_excel_real.py thêm sheet "Dac trung tap danh gia" (bỏ qua nếu kết quả cũ không có các file này).
+
+### Cách đọc Hình 6 (`fig6_do_dai_doan.png`)
+
+Các ví dụ số lấy từ bộ test (`results_test/`).
+
+**Bố cục**
+- Hàng trên: đoạn speech. Hàng dưới: khoảng lặng nằm giữa hai đoạn speech (không tính phần im lặng ở đầu và cuối file).
+- Mỗi category một ô; ô cuối "Tất cả" gộp mọi file.
+- Trục x dưới: độ dài (s), bước 0.5 s. Nhãn theo bin 0.5 s nên độ dài luôn là bội của 0.5 s.
+  Trục x trên: cùng độ dài, tính bằng số frame 0.5 s.
+- Trục y 0–100% dùng chung cho cột và hai đường.
+
+**Cột màu: % số đoạn có đúng độ dài đó**
+- Chiều cao cột = số đoạn dài đúng x ÷ tổng số đoạn n của category. Tổng các cột = 100%.
+- Ví dụ Asm, hàng speech (n = 440): 55 đoạn dài 0.5 s → cột 12.5%; 98 đoạn dài 1 s → cột 22.3%.
+- Cột cuối "≥ 5" gộp mọi đoạn dài từ 5 s trở lên. Cột này cao không có nghĩa là nhiều đoạn dài đúng 5 s
+  (Clean, hàng speech: 47%, vì phần lớn đoạn rất dài).
+- Cột chỉ đếm số đoạn: đoạn 0.5 s và đoạn 5 s đều tính là 1.
+
+**Đường đen (chấm tròn): % tích luỹ theo số đoạn**
+- Giá trị tại x = % số đoạn dài ≤ x, bằng tổng các cột từ trái tới x. Mỗi cột làm đường nhảy lên đúng bằng chiều cao
+  của nó (Asm: 12.5% → 34.8% → 52.5% → … → 100%).
+- Điểm đường cắt 50% là độ dài trung vị (Asm: 1.5 s).
+- Dốc đứng ở bên trái = toàn đoạn ngắn (Music chạm 100% ngay tại 1.5 s). Đoạn nằm ngang = không có đoạn nào ở độ dài đó.
+- Điểm cuối luôn là 100%.
+
+**Đường tím nét đứt (chấm vuông): % tích luỹ theo thời lượng**
+- Giá trị tại x = % tổng thời lượng nằm trong các đoạn dài ≤ x. Mẫu số là tổng thời lượng các đoạn cùng loại
+  (tổng thời gian speech ở hàng trên, tổng thời gian khoảng lặng ở hàng dưới).
+- Mỗi đoạn được tính theo độ dài của nó, nên đoạn 2 s nặng gấp 4 lần đoạn 0.5 s.
+- Ví dụ Asm, hàng speech (tổng khoảng 1 129 s): tại 0.5 s là 2.4%; tại 1 s là 11%; tại 4.5 s là 64%.
+  Như vậy 34 đoạn dài ≥ 5 s (7.7% số đoạn) chứa 36% thời lượng speech.
+
+**So hai đường**
+- Tím nằm xa dưới đen: đoạn ngắn nhiều nhưng chiếm ít thời gian, nên ít ảnh hưởng tới metric theo bin
+  (Asm, Babble, Noise; Clean ở hàng speech).
+- Tím bám sát đen: đoạn ngắn chiếm cả số lượng lẫn thời gian, nên ảnh hưởng thật lên metric
+  (Music, hàng speech: 45% số đoạn và 26% thời lượng dưới 0.96 s; Clean, hàng khoảng lặng: 58% số khoảng và 23% thời lượng).
+- Đánh giá theo sự kiện (event-F1, số biên): nhìn đường đen. Đánh giá theo bin (MR, FAR, F1, DCF): nhìn đường tím.
+
+**Vạch đứng**
+- Nét đứt xám, 0.5 s: 1 frame, độ dài ngắn nhất nhãn ghi được. Tiếng ngắn hơn (vd một từ 0.3 s) vẫn được ghi là 1 frame.
+- Chấm đỏ, 0.96 s: cửa sổ model. Đoạn bên trái vạch không chứa trọn một cửa sổ nào. Cửa sổ nào chứa đoạn đó cũng lẫn
+  ít nhất 0.46 s phần xung quanh, nên:
+  - đoạn speech ngắn dễ bị bỏ sót (miss);
+  - khoảng lặng ngắn dễ bị nhận nhầm là speech.
+
+  Đoạn 1 s là trường hợp sát nút: tuỳ vị trí, có 1 cửa sổ nằm trọn trong đoạn hoặc không có cửa sổ nào
+  (cửa sổ dịch từng bước 0.08 s).
+- Gạch-chấm cam, 0.72 s (chỉ hàng khoảng lặng): pad nới mỗi đoạn speech 0.10 s ở đầu và 0.12 s ở cuối, rồi merge gộp
+  hai đoạn nếu khoảng lặng còn lại < 0.5 s. Vì vậy khoảng lặng ban đầu < 0.5 + 0.22 = 0.72 s bị lấp thành speech,
+  kể cả khi model đúng hoàn toàn, và các bin đó bị tính là FA ở A2–A4.
+  Mốc này thay đổi theo `--pad-pre`, `--pad-post`, `--merge-gap` (vd `--merge-gap 1.0` → 1.22 s).
+- Giá trị của hai đường tại vị trí một vạch = % số đoạn và % thời lượng nằm bên trái vạch đó.
+
+**Tiêu đề mỗi ô**
+- n: số đoạn, tức cỡ mẫu. n nhỏ thì % dao động mạnh (Music: 20 đoạn speech, nên 1 đoạn = 5%).
+- "< 0.96 s: x% số đoạn · y% thời lượng": tỉ lệ đoạn ngắn hơn cửa sổ model, theo hai cách đếm.
+- "bị lấp: …" (hàng khoảng lặng): tỉ lệ khoảng lặng bị pad + merge lấp. Với nhãn bin 0.5 s và tham số mặc định,
+  con số này trùng với "< 0.96 s", vì chỉ khoảng lặng 0.5 s nằm dưới cả hai mốc.
+- Mẫu số thời lượng ở đây là tổng thời lượng khoảng lặng giữa hai đoạn speech. Muốn ước lượng ảnh hưởng lên FAR thì
+  chia cho toàn bộ thời gian non-speech (tính cả đầu và cuối file). Ví dụ với Clean: 23% theo hình, nhưng là 21.3% thời gian non-speech.
+
+### Cách đọc Hình 5 (`fig5_dac_trung_tap.png`)
+
+- (a) Đoạn speech gộp thành 4 nhóm theo cửa sổ model (< 0.96 s, 0.96–1.46 s, 1.46–2 s, ≥ 2 s). Mỗi màu là một category.
+  Chiều cao cột = % số đoạn speech của category rơi vào nhóm. Đây là bản gộp của các cột trong Hình 6.
+- (b) Giống (a) cho khoảng lặng. Chú thích ghi n và % khoảng lặng bị pad + merge lấp.
+- (c) Mỗi cột chồng là toàn bộ cửa sổ 0.96 s của một category (100%), chia ba phần:
+  - xanh dương: cửa sổ toàn non-speech;
+  - cam: cửa sổ lẫn speech và non-speech, có ghi %;
+  - xanh lá: cửa sổ toàn speech.
+
+  Phần cam càng lớn thì kết quả càng phụ thuộc vào cách model chấm cửa sổ lẫn (Asm cao nhất: 21%).
+- (d) Trần F1 của model hoàn hảo cùng cửa sổ 0.96 s (điểm = tỉ lệ speech trong cửa sổ, ngưỡng 0.5):
+  - cột xanh: dùng điểm bin thô (A0). ≈ 1.00 ở mọi category, tức riêng độ phân giải không gây mất mát;
+  - cột cam: đi qua hậu xử lý hiện tại (A4).
+
+  Chênh lệch giữa hai cột là phần mất do hậu xử lý, lớn nhất ở Music (0.86).
+
 ## Các file
 
-- vadlib.py: đọc file, gom bin 0.5s, hậu xử lý (rescore hop, pad, merge, rebin), metric.
+- vadlib.py: đọc file, gom bin 0.5s, hậu xử lý (rescore hop, pad, merge, rebin), metric, đặc trưng tập theo độ phân giải
+  model (window_frac, oracle_model, run_lengths, dist_to_transition, centers_per_bin).
   Đọc được output model cả dạng 'idx, start, end, score' lẫn 'start end score'.
   rescore_hop (gộp điểm các cửa sổ chồng nhau thành điểm mỗi hop 0.08 s, dùng cho A1–A4): mặc định trọng số
   tam giác theo tâm cửa sổ + làm mượt trung bình 5 hop. Đổi ở RESCORE_WEIGHT / RESCORE_SMOOTH đầu file

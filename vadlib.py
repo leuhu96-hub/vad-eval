@@ -170,3 +170,36 @@ def boundary_deltas(gt_segs, pr_segs):
             if o > bo: best, bo = p, o
         if best: out.append((best[0] - g[0], best[1] - g[1]))
     return out
+
+# ---------------- đặc trưng tập theo độ phân giải model ----------------
+FINE = 0.02   # lưới chung của nhãn và model: BIN = 25 ô, HOP = 4 ô, WIN = 48 ô -> mọi phép tính chính xác
+
+def window_frac(m, y):
+    """Tỉ lệ speech của nhãn (bin 0.5 s) trong từng cửa sổ [start, end) của output model. Phần cửa sổ vượt cuối nhãn
+    không tính (chuẩn hoá theo phần có nhãn); cửa sổ nằm hẳn ngoài nhãn = NaN."""
+    g = np.repeat(np.asarray(y, float), int(round(BIN / FINE))); cs = np.r_[0.0, np.cumsum(g)]
+    i0, i1 = (np.clip(np.round(m[k].to_numpy() / FINE).astype(int), 0, len(g)) for k in ("start", "end"))
+    return np.where(i1 > i0, (cs[i1] - cs[i0]) / np.maximum(i1 - i0, 1), np.nan)
+
+def oracle_model(m, y):
+    """Model 'hoàn hảo' cùng lưới cửa sổ: điểm = tỉ lệ speech thật trong cửa sổ; bỏ cửa sổ nằm ngoài nhãn."""
+    f = window_frac(m, y); ok = ~np.isnan(f)
+    o = m.loc[ok].copy(); o["score"] = f[ok]
+    return o.reset_index(drop=True)
+
+def run_lengths(y):
+    """(độ dài các đoạn speech, độ dài các khoảng lặng nằm giữa hai đoạn speech), giây."""
+    segs = frames_to_segs(np.asarray(y).astype(bool), BIN)
+    return [b - a for a, b in segs], [c - b for (_, b), (c, _) in zip(segs[:-1], segs[1:])]
+
+def dist_to_transition(y):
+    """Khoảng cách (s) từ tâm mỗi bin tới chuyển trạng thái gần nhất của nhãn; inf nếu file chỉ có 1 lớp."""
+    y = np.asarray(y); tr = (np.flatnonzero(y[1:] != y[:-1]) + 1) * BIN; c = (np.arange(len(y)) + 0.5) * BIN
+    if not len(tr): return np.full(len(y), np.inf)
+    k = np.searchsorted(tr, c)
+    return np.minimum(np.abs(c - tr[np.maximum(k - 1, 0)]), np.abs(tr[np.minimum(k, len(tr) - 1)] - c))
+
+def centers_per_bin(m, n_bins):
+    """Số tâm cửa sổ rơi vào mỗi bin (điểm A0 của bin là trung bình các cửa sổ này; 0 -> nội suy)."""
+    b = np.floor(m["center"].to_numpy() / BIN).astype(int)
+    return np.bincount(b[(b >= 0) & (b < n_bins)], minlength=n_bins)
