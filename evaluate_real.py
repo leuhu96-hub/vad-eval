@@ -21,6 +21,8 @@ lag từng file chỉ báo cáo, không tự dịch; dev/test chia theo file, ph
     python evaluate_real.py --root "C:/Users/leuhu/OneDrive/Máy tính/test" --out results_test
     python evaluate_real.py --root <root> --out results_thu --overlap mean --smooth 1 --pad-pre 0.2 --merge-gap 1.0 \
         --drop 0.1 --criterion F1-max          # tinh chỉnh hậu xử lý / chọn ngưỡng; xem --help
+    python evaluate_real.py --root <root> --out results_dexuat --preset de-xuat   # chạy cả báo cáo với cấu hình đề xuất
+    python evaluate_real.py --root <root> --out results_test --tune 300          # + tìm cấu hình tốt nhất trên dev
     python evaluate_real.py --raw C:/vad_work/run1/raw_real --gt C:/vad_work/real_test/gt_policy --audio <audio> \
         --gt-alt <auto_labels/Groundtruth> --silero-cache <auto_labels/cache> --out results_real
 """
@@ -39,6 +41,11 @@ except ImportError:
     sf = None
 warnings.filterwarnings("ignore")
 
+# cấu hình đề xuất (vad_post_processing.md, báo cáo tối ưu hậu xử lý): ngưỡng kép, merge -> drop -> pad, pad 0, median 3 hop
+PRESETS = {"hien-tai": {}, "de-xuat": dict(overlap="tri", smooth=3, smooth_kind="median", domain="prob", hyst=0.15, order="mdp",
+                                           pad_pre=0.0, pad_post=0.0, merge_gap=0.5, drop=0.32)}
+_pp = argparse.ArgumentParser(add_help=False); _pp.add_argument("--preset", choices=list(PRESETS), default="hien-tai")
+_preset = _pp.parse_known_args()[0].preset
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("--root", type=Path, help="thư mục bộ dữ liệu: tự tìm Model/, audio/, Ground_truth/")
 ap.add_argument("--raw", type=Path, help="output model (mặc định thư mục Model trong --root)")
@@ -56,13 +63,26 @@ ap.add_argument("--mo-ta-model", help="mô tả model cho báo cáo")
 ap.add_argument("--dev-frac", type=float, default=0.3, help="tỉ lệ file vào dev (chọn ngưỡng), còn lại là test")
 ap.add_argument("--out", type=Path, default=Path("results_real"))
 g = ap.add_argument_group("tinh chỉnh hậu xử lý (A1–A4)")
+g.add_argument("--preset", choices=list(PRESETS), default="hien-tai",
+               help="bộ tham số hậu xử lý: hien-tai = cấu hình hiện tại, de-xuat = cấu hình đề xuất; tham số ghi rõ vẫn ghi đè (mặc định %(default)s)")
 g.add_argument("--overlap", choices=list(OVERLAP_DESC), default=RESCORE_WEIGHT,
                help="gộp điểm các cửa sổ chồng nhau thành điểm mỗi hop 0.08 s (mặc định %(default)s)")
-g.add_argument("--smooth", type=int, default=RESCORE_SMOOTH, help="làm mượt trung bình trượt N hop; 1 = không (mặc định %(default)s)")
-g.add_argument("--pad-pre", type=float, default=0.10, help="nới đầu đoạn speech, giây (mặc định %(default)s)")
-g.add_argument("--pad-post", type=float, default=0.12, help="nới cuối đoạn speech, giây (mặc định %(default)s)")
+g.add_argument("--smooth", type=int, default=RESCORE_SMOOTH, help="làm mượt N hop; 1 = không (mặc định %(default)s)")
+g.add_argument("--smooth-kind", choices=list(SMOOTH_DESC), default="mean", help="kiểu làm mượt: mean / median / gauss (mặc định %(default)s)")
+g.add_argument("--domain", choices=["prob", "logit"], default="prob", help="gộp tri/hann/mean trong miền xác suất hay log-odds (mặc định %(default)s)")
+g.add_argument("--hyst", type=float, default=0.0,
+               help="ngưỡng kép: bắt đầu speech khi điểm >= ngưỡng, kết thúc khi < ngưỡng − N; 0 = ngưỡng đơn (mặc định %(default)s)")
+g.add_argument("--order", choices=list(ORDER_DESC), default="pdm",
+               help="thứ tự ở A4: pdm = pad → drop → merge (hiện tại), mdp = merge → drop → pad (mặc định %(default)s)")
+g.add_argument("--pad-pre", type=float, default=0.10, help="nới đầu đoạn speech, giây; âm = co (mặc định %(default)s)")
+g.add_argument("--pad-post", type=float, default=0.12, help="nới cuối đoạn speech, giây; âm = co (mặc định %(default)s)")
 g.add_argument("--merge-gap", type=float, default=0.50, help="gộp hai đoạn cách nhau < N giây (mặc định %(default)s)")
-g.add_argument("--drop", type=float, default=0.0, help="bỏ đoạn ngắn hơn N giây sau padding, trước merge; chỉ ở A4 (mặc định %(default)s)")
+g.add_argument("--drop", type=float, default=0.0,
+               help="bỏ đoạn ngắn hơn N giây; pdm: đo sau pad, mdp: đo trước pad; chỉ ở A4 (mặc định %(default)s)")
+g = ap.add_argument_group("so sánh phương án hậu xử lý (mục 6)")
+g.add_argument("--no-compare", action="store_true", help="bỏ mục so sánh các phương án hậu xử lý")
+g.add_argument("--tune", type=int, default=0, help="số lần thử khi tìm cấu hình hậu xử lý tốt nhất trên dev; 0 = không tìm (mặc định %(default)s)")
+g.add_argument("--tune-seed", type=int, default=0, help="seed tìm cấu hình (mặc định %(default)s)")
 g = ap.add_argument_group("tinh chỉnh chọn ngưỡng và thống kê")
 g.add_argument("--criterion", choices=["DCF-min", "F1-max"], default="DCF-min", help="tiêu chí chọn ngưỡng trên dev (mặc định %(default)s)")
 g.add_argument("--dcf-miss", type=float, default=0.75, help="trọng số miss trong DCF; FA = 1 − giá trị này (mặc định %(default)s)")
@@ -74,19 +94,26 @@ g.add_argument("--grid-post", default="0,60,120,240", help="lưới pad sau, ms 
 g.add_argument("--grid-gap", default="0,250,500,750,1000,1500", help="lưới merge gap, ms (mặc định %(default)s)")
 g.add_argument("--seed", type=int, default=3, help="seed chia dev/test (mặc định %(default)s)")
 g.add_argument("--n-boot", type=int, default=1000, help="số lần bootstrap cho CI (mặc định %(default)s)")
+ap.set_defaults(**PRESETS[_preset])
 A = ap.parse_args()
 def ms_list(s): return [float(x) / 1000 for x in s.split(",") if x.strip()]
 GRID = dict(pre=ms_list(A.grid_pre), post=ms_list(A.grid_post), gap=ms_list(A.grid_gap))
 for cond, msg in [(A.smooth >= 1, "--smooth phải >= 1"), (0 < A.dev_frac < 1, "--dev-frac phải trong (0, 1)"),
                   (0 <= A.dcf_miss <= 1, "--dcf-miss phải trong [0, 1]"), (A.thr_step > 0 and A.thr_min < A.thr_max, "dải ngưỡng sai"),
-                  (min(A.pad_pre, A.pad_post, A.merge_gap, A.drop) >= 0, "pad / merge / drop phải >= 0"),
+                  (min(A.merge_gap, A.drop, A.hyst) >= 0, "merge / drop / hyst phải >= 0"),
+                  (min(A.pad_pre, A.pad_post) > -WIN / 2, "pad âm quá lớn"), (A.tune >= 0, "--tune phải >= 0"),
                   (all(GRID.values()), "--grid-* không được rỗng"), (A.n_boot >= 100, "--n-boot phải >= 100")]:
     if not cond: raise SystemExit(msg)
 ms = lambda x: f"{x * 1000:g}"
-CONFIG_DESC = ["Điểm bin thô, không hậu xử lý", f"Rescore ({rescore_desc(A.overlap, A.smooth)}) + rebin",
+RS = dict(weight=A.overlap, smooth=A.smooth, smooth_kind=A.smooth_kind, domain=A.domain)   # cách rescore dùng ở A1–A4
+HYST_DESC = f", ngưỡng kép Δ {A.hyst:g}" if A.hyst > 0 else ""
+CONFIG_DESC = ["Điểm bin thô, không hậu xử lý", f"Rescore ({rescore_desc(**RS)}) + rebin{HYST_DESC}",
                f"+ pad {ms(A.pad_pre)}/{ms(A.pad_post)} ms", f"+ merge < {ms(A.merge_gap)} ms",
-               "+ pad" + (f" + drop {ms(A.drop)} ms" if A.drop else "") + " + merge (hiện tại)"]
-PARAMS = dict(overlap=A.overlap, smooth=A.smooth, pad_pre=A.pad_pre, pad_post=A.pad_post, merge_gap=A.merge_gap, drop=A.drop,
+               (f"+ merge < {ms(A.merge_gap)} ms" + (f" + drop {ms(A.drop)} ms" if A.drop else "") + f" + pad {ms(A.pad_pre)}/{ms(A.pad_post)} ms"
+                if A.order == "mdp" else "+ pad" + (f" + drop {ms(A.drop)} ms" if A.drop else "") + " + merge")
+               + (" (hiện tại)" if A.preset == "hien-tai" else f" (preset {A.preset})")]
+PARAMS = dict(preset=A.preset, overlap=A.overlap, smooth=A.smooth, smooth_kind=A.smooth_kind, domain=A.domain, hyst=A.hyst, order=A.order,
+              pad_pre=A.pad_pre, pad_post=A.pad_post, merge_gap=A.merge_gap, drop=A.drop, tune=A.tune, tune_seed=A.tune_seed,
               criterion=A.criterion, dcf_miss=A.dcf_miss, thr_min=A.thr_min, thr_max=A.thr_max, thr_step=A.thr_step,
               grid_pre=A.grid_pre, grid_post=A.grid_post, grid_gap=A.grid_gap, seed=A.seed, n_boot=A.n_boot, dev_frac=A.dev_frac)
 
@@ -257,7 +284,7 @@ if A.synth_gt and A.synth_gt.exists():
         if not p.exists() or raw[k].stat().st_size == 0: continue
         y = load_labels(p); m = load_model(raw[k]); n = len(y)
         if n < 2 or len(m) == 0: continue
-        syn[raw[k].stem] = dict(y=y, n=n, m=m, braw=bin_scores(m, n), fr=rescore_hop(m, dur=n * BIN, weight=A.overlap, smooth=A.smooth))
+        syn[raw[k].stem] = dict(y=y, n=n, m=m, braw=bin_scores(m, n), fr=rescore_hop(m, dur=n * BIN, **RS))
 S["n_synth_val"] = len(syn)
 
 # =============== 5b/5c/5d. Cấu trúc, định dạng audio ===============
@@ -321,15 +348,18 @@ S.update(lag_median=float(lagdf.lag_s.median()) if len(lagdf) else None, lag_fla
 
 # cache điểm
 for d in recs.values():
-    d["braw"] = bin_scores(d["m"], d["n"]); d["fr"] = rescore_hop(d["m"], dur=d["n"] * BIN, weight=A.overlap, smooth=A.smooth); d["bmask"] = boundary_mask(d["y"])
+    d["braw"] = bin_scores(d["m"], d["n"]); d["fr"] = rescore_hop(d["m"], dur=d["n"] * BIN, **RS); d["bmask"] = boundary_mask(d["y"])
     d["sure"] = (d["y"] == d["y_alt"]) & (d["y_ref"] == d["y2"]) if d["has_l2"] else None   # các nhãn cùng đồng ý
 
 def pred_cached(d, thr, mode="A4", pre=None, post=None, gap=None):
-    """A0: điểm bin thô | A1: rescore + rebin | A2: + pad | A3: + merge | A4: + pad + drop + merge | khác: A4 với pre/post/gap cho trước."""
+    """A0: điểm bin thô | A1: rescore + rebin | A2: + pad | A3: + merge | A4: + pad + drop + merge theo --order
+    | khác: A4 với pre/post/gap cho trước. A1–A4 dùng ngưỡng kép khi --hyst > 0."""
     if mode == "A0": return (d["braw"] >= thr).astype(int)
     pre, post, gap = (A.pad_pre if pre is None else pre), (A.pad_post if post is None else post), (A.merge_gap if gap is None else gap)
     p, q, g, dr = {"A1": (0, 0, 0, 0), "A2": (pre, post, 0, 0), "A3": (0, 0, gap, 0)}.get(mode, (pre, post, gap, A.drop))
-    return segs_to_bins(pad_merge(frames_to_segs(d["fr"] >= thr, HOP), p, q, g, dur=d["n"] * BIN, drop=dr), d["n"])
+    od = A.order if mode not in ("A1", "A2", "A3") else "pdm"
+    fr = hysteresis(d["fr"], thr, thr - A.hyst if A.hyst > 0 else None)
+    return segs_to_bins(postprocess_segs(frames_to_segs(fr, HOP), p, q, g, dr, dur=d["n"] * BIN, order=od), d["n"])
 
 # =============== 1. Phân bố ===============
 rows = []
@@ -371,7 +401,9 @@ S.update(n_dev=len(dev), n_test=len(test), pct_speech_dev=float(cat_(dev, "y").m
 
 # =============== 2b. Đặc trưng tập theo độ phân giải model (chỉ từ nhãn + lưới cửa sổ, không dùng điểm model) ===============
 # thang thời gian: nhãn bin 0.5 s, cửa sổ 0.96 s, bin + cửa sổ 1.46 s; lưới chung 0.02 s (vadlib.FINE)
-FILL_GAP = A.merge_gap + A.pad_pre + A.pad_post           # khoảng lặng ngắn hơn -> pad + merge lấp kể cả khi model đúng
+# khoảng lặng ngắn hơn -> pad + merge lấp kể cả khi model đúng (mdp: merge trên đoạn chưa pad, rồi pad gộp chồng lấn)
+FILL_GAP = A.merge_gap + max(A.pad_pre, 0) + max(A.pad_post, 0) if A.order == "pdm" else max(A.merge_gap, A.pad_pre + A.pad_post)
+DROP_ADD = A.pad_pre + A.pad_post if A.order == "pdm" else 0.0   # drop đo sau pad (pdm) hay trước pad (mdp)
 LEN_EDGES, LEN_CLS = [WIN, WIN + BIN, 2.0], ["< 0.96 s", "0.96–1.46 s", "1.46–2 s", "≥ 2 s"]
 LEN_KEY = ["lt_win", "win_146", "146_2", "ge_2"]
 DIST_EDGES, DIST_CLS = [HALF_WIN, WIN, WIN + HALF_WIN], ["≤ 0.48 s", "0.48–0.96 s", "0.96–1.44 s", "> 1.44 s"]
@@ -389,10 +421,10 @@ for f, d in recs.items():
     sp, gp = (np.array(v, float) for v in run_lengths(y)); runs[f] = (sp, gp)
     wf = window_frac(m, y); wf = wf[~np.isnan(wf)]; fracs[f] = wf
     om = oracle_model(m, y)
-    orc = dict(n=n, braw=bin_scores(om, n), fr=rescore_hop(om, dur=n * BIN, weight=A.overlap, smooth=A.smooth))
+    orc = dict(n=n, braw=bin_scores(om, n), fr=rescore_hop(om, dur=n * BIN, **RS))
     r = dict(file=f, category=d["category"], split=split[f], n_bin=n, dur_s=n * BIN, speech_bins=int(y.sum()), speech_s=y.sum() * BIN,
              n_trans=int((y[1:] != y[:-1]).sum()), n_seg=len(sp), n_gap=len(gp), n_win=len(wf),
-             gap_filled=int((gp < FILL_GAP - 1e-9).sum()), seg_dropped=int((sp + A.pad_pre + A.pad_post < A.drop - 1e-9).sum()),
+             gap_filled=int((gp < FILL_GAP - 1e-9).sum()), seg_dropped=int((sp + DROP_ADD < A.drop - 1e-9).sum()),
              win_ns=int((wf == 0).sum()), win_mixed=int(((wf > 0) & (wf < 1)).sum()), win_sp=int((wf == 1).sum()),
              low_cov=int((centers_per_bin(m, n) < MIN_COV).sum()))
     for i, k in enumerate(LEN_KEY):
@@ -640,6 +672,140 @@ for pre in GRID["pre"]:
 grid = pd.DataFrame(grid)
 S["grid_best"] = grid.loc[grid.DCF.idxmin()].to_dict()
 
+# =============== 6. So sánh phương án hậu xử lý ===============
+# Mỗi cấu hình: điểm hop (gộp cửa sổ + làm mượt) -> ngưỡng (đơn / kép) -> đoạn -> merge / drop / pad -> bin 0.5 s.
+# Ngưỡng chọn riêng cho từng cấu hình trên dev theo --criterion, đánh giá một lần trên test; Δ so với B0 có CI bootstrap
+# ghép cặp theo file. B0 luôn là cấu hình hiện tại (không theo --preset / tham số dòng lệnh); C1–C7 = B0 + một thay đổi;
+# CLI = tham số dòng lệnh nếu khác B0 và R. AUC chỉ phụ thuộc cách gộp / làm mượt; ngưỡng kép, pad, drop, merge chỉ đổi MR / FAR / F1 / DCF.
+PP_KEYS = ("overlap", "smooth", "smooth_kind", "domain", "hyst", "order", "pre", "post", "gap", "drop", "hop_sub")
+CLI = dict(overlap=A.overlap, smooth=A.smooth, smooth_kind=A.smooth_kind, domain=A.domain, hyst=A.hyst, order=A.order,
+           pre=A.pad_pre, post=A.pad_post, gap=A.merge_gap, drop=A.drop, hop_sub=1)
+BASE = dict(overlap=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH, smooth_kind="mean", domain="prob", hyst=0.0, order="pdm",
+            pre=0.10, post=0.12, gap=0.50, drop=0.0, hop_sub=1)   # B0 luôn là cấu hình hiện tại để các lần chạy so sánh được
+_rec = PRESETS["de-xuat"]
+REC = dict(overlap=_rec["overlap"], smooth=_rec["smooth"], smooth_kind=_rec["smooth_kind"], domain=_rec["domain"], hyst=_rec["hyst"],
+           order=_rec["order"], pre=_rec["pad_pre"], post=_rec["pad_post"], gap=_rec["merge_gap"], drop=_rec["drop"], hop_sub=1)
+def cfg_desc(c):
+    return (f"{rescore_desc(c['overlap'], c['smooth'], c['smooth_kind'], c['domain'])}; "
+            + (f"ngưỡng kép Δ {c['hyst']:g}" if c["hyst"] > 0 else "ngưỡng đơn")
+            + f"; {ORDER_DESC[c['order']]}: pad {ms(c['pre'])}/{ms(c['post'])} ms, merge < {ms(c['gap'])} ms, drop {ms(c['drop'])} ms"
+            + (f"; hop {HOP * c['hop_sub']:g} s (giữ 1/{c['hop_sub']} cửa sổ)" if c["hop_sub"] > 1 else ""))
+COMPARE = [("B0", "Hiện tại (pad 100/120, merge 500, mean 5 hop)", BASE),
+           ("C1", "B0 + ngưỡng kép Δ 0.15", {**BASE, "hyst": 0.15}),
+           ("C2", "B0 + thứ tự merge → drop 0.32 s → pad", {**BASE, "order": "mdp", "drop": 0.32}),
+           ("C3", "B0 + pad 0 / 0", {**BASE, "pre": 0.0, "post": 0.0}),
+           ("C4", "B0 + làm mượt median 3 hop", {**BASE, "smooth": 3, "smooth_kind": "median"}),
+           ("C5", "B0 + không làm mượt", {**BASE, "smooth": 1}),
+           ("C6", "B0 + trọng số Hann", {**BASE, "overlap": "hann"}),
+           ("C7", "B0 + gộp miền logit", {**BASE, "domain": "logit"}),
+           ("R", "Đề xuất (preset de-xuat)", REC),
+           ("R-h16", "Đề xuất, hop 0.16 s (giảm 2× số lần chạy model)", {**REC, "hop_sub": 2}),
+           ("R-h24", "Đề xuất, hop 0.24 s (giảm 3× số lần chạy model)", {**REC, "hop_sub": 3})]
+if CLI not in (BASE, REC): COMPARE.insert(1, ("CLI", "Cấu hình chính (tham số dòng lệnh)", CLI))
+_fr_cache = {}
+def fr_of(f, c):
+    """Điểm hop của file f theo cách gộp / làm mượt / hop của cấu hình c (cache)."""
+    k = (f, c["overlap"], c["smooth"], c["smooth_kind"], c["domain"], c["hop_sub"])
+    if k not in _fr_cache:
+        d = recs[f]; m = d["m"].iloc[::c["hop_sub"]]
+        _fr_cache[k] = rescore_hop(m, dur=d["n"] * BIN, weight=c["overlap"], smooth=c["smooth"], smooth_kind=c["smooth_kind"], domain=c["domain"])
+    return _fr_cache[k]
+def pred_cfg(f, c, thr):
+    d = recs[f]; b = hysteresis(fr_of(f, c), thr, thr - c["hyst"] if c["hyst"] > 0 else None)
+    segs = postprocess_segs(frames_to_segs(b, HOP), c["pre"], c["post"], c["gap"], c["drop"], dur=d["n"] * BIN, order=c["order"])
+    return segs_to_bins_fast(segs, d["n"])
+def cnt_of(y, p): return np.array([((y == 1) & (p == 1)).sum(), ((y == 1) & (p == 0)).sum(), ((y == 0) & (p == 1)).sum(), ((y == 0) & (p == 0)).sum()])
+def met(c4):
+    tp, fn, fp, tn = c4; mr = fn / (tp + fn) if tp + fn else np.nan; far = fp / (fp + tn) if fp + tn else np.nan
+    return dict(MR=mr, FAR=far, Precision=tp / (tp + fp) if tp + fp else np.nan, Recall=1 - mr if tp + fn else np.nan,
+                F1=2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else np.nan, DCF=A.dcf_miss * mr + (1 - A.dcf_miss) * far)
+def objective(m_): return m_["DCF"] if A.criterion == "DCF-min" else -m_["F1"]
+def pick_thr(c, files, thrs):
+    """Ngưỡng tốt nhất trên files theo --criterion; trả (ngưỡng, metric tại ngưỡng đó)."""
+    best_ = None
+    for t in thrs:
+        m_ = met(sum(cnt_of(recs[f]["y"], pred_cfg(f, c, t)) for f in files))
+        if best_ is None or objective(m_) < objective(best_[1]) - 1e-12: best_ = (float(t), m_)
+    return best_
+
+# tìm cấu hình tốt nhất trên dev (--tune): Optuna TPE nếu có, không thì tìm ngẫu nhiên; ngưỡng quét trong từng lần thử
+SPACE = dict(overlap=["tri", "hann"], domain=["prob", "logit"], smooth=["mean:1", "median:3", "median:5", "gauss:5", "mean:5"],
+             hyst=[float(round(x, 2)) for x in np.arange(0, 0.36, 0.05)], order=["pdm", "mdp"],
+             pre=[float(round(x, 2)) for x in np.arange(-0.16, 0.17, 0.04)], post=[float(round(x, 2)) for x in np.arange(-0.16, 0.17, 0.04)],
+             gap=[float(round(x, 1)) for x in np.arange(0, 1.01, 0.1)], drop=[float(round(x, 2)) for x in np.arange(0, 0.57, 0.08)])
+def space_to_cfg(v):
+    k, n = v["smooth"].split(":")
+    return dict(overlap=v["overlap"], smooth=int(n), smooth_kind=k, domain=v["domain"], hyst=float(v["hyst"]), order=v["order"],
+                pre=float(v["pre"]), post=float(v["post"]), gap=float(v["gap"]), drop=float(v["drop"]), hop_sub=1)
+tune_rows, tuner = [], None
+if A.tune and not A.no_compare:
+    thr_tune = thr_sweep[::2] if len(thr_sweep) > 40 else thr_sweep
+    def run_trial(v):
+        c = space_to_cfg(v); t, m_ = pick_thr(c, dev, thr_tune)
+        tune_rows.append(dict(trial=len(tune_rows), **v, thr=t, **{f"dev_{k}": m_[k] for k in ("F1", "DCF", "MR", "FAR")}))
+        return objective(m_)
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        st_ = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=A.tune_seed)); seen_ = []
+        for c0 in (BASE, REC, CLI):    # bắt đầu từ cấu hình hiện tại, đề xuất, dòng lệnh (nếu nằm trong không gian tìm)
+            v0 = dict(overlap=c0["overlap"], domain=c0["domain"], smooth=f"{c0['smooth_kind']}:{c0['smooth']}", hyst=c0["hyst"], order=c0["order"],
+                      pre=c0["pre"], post=c0["post"], gap=c0["gap"], drop=c0["drop"])
+            if all(v0[k] in SPACE[k] for k in SPACE) and v0 not in seen_: st_.enqueue_trial(v0); seen_.append(v0)
+        st_.optimize(lambda tr: run_trial({k: tr.suggest_categorical(k, SPACE[k]) for k in SPACE}), n_trials=A.tune)
+        tuner = "Optuna TPE"
+    except ImportError:
+        rs_t = np.random.default_rng(A.tune_seed)
+        for _ in range(A.tune): run_trial({k: SPACE[k][rs_t.integers(len(SPACE[k]))] for k in SPACE})
+        tuner = "tìm ngẫu nhiên (cài optuna để dùng TPE)"
+    tune_df = pd.DataFrame(tune_rows)
+    bt = tune_df.loc[tune_df.dev_DCF.idxmin() if A.criterion == "DCF-min" else tune_df.dev_F1.idxmax()]
+    COMPARE.append(("T", f"Tốt nhất trên dev ({tuner}, {A.tune} lần thử)", space_to_cfg(bt)))
+    tune_df.to_csv(OUT / "pp_tune_trials.csv", index=False)
+else:
+    (OUT / "pp_tune_trials.csv").unlink(missing_ok=True)
+
+pp_rows, pp_cat_rows, pp_cnt = [], [], {}
+if not A.no_compare:
+    for code, name, c in COMPARE:
+        t, mdev = pick_thr(c, dev, thr_sweep)
+        P = {f: pred_cfg(f, c, t) for f in test}
+        pp_cnt[code] = {f: (cnt_of(recs[f]["y"], P[f]), cnt_of(recs[f]["y"][~recs[f]["bmask"]], P[f][~recs[f]["bmask"]])) for f in test}
+        tot = sum(v[0] for v in pp_cnt[code].values()); tot_nb = sum(v[1] for v in pp_cnt[code].values()); mt = met(tot)
+        ev = np.zeros(6)
+        for f in test:
+            gs, ps = bins_to_segs(recs[f]["y"]), bins_to_segs(P[f])
+            ev += [*event_f1(gs, ps)[1:], *frag_merge(gs, ps), len(ps)]
+        tp_, fp_, fn_, fr_, mg_, npr = ev
+        yt = cat_(test, "y"); st = np.concatenate([frames_to_bin_scores(fr_of(f, c), recs[f]["n"]) for f in test])
+        pp_rows.append(dict(Mã=code, Cấu_hình=name, Chi_tiết=cfg_desc(c), **{k: c[k] for k in PP_KEYS}, Ngưỡng_dev=t,
+                            Ngưỡng_off=round(t - c["hyst"], 4) if c["hyst"] > 0 else t, dev_F1=mdev["F1"], dev_DCF=mdev["DCF"],
+                            **mt, F1_nb=met(tot_nb)["F1"], AUC_hop_bin=auc(yt, st), event_F1=f1_(tp_, fp_, fn_),
+                            n_pred_seg=int(npr), n_fragmented=int(fr_), n_overmerged=int(mg_),
+                            so_lan_chay_model=f"1/{c['hop_sub']}" if c["hop_sub"] > 1 else "1"))
+        for cc in CATS_T:
+            fs = by_cat(cc, test); mc = met(sum(pp_cnt[code][f][0] for f in fs))
+            pp_cat_rows.append(dict(Mã=code, Category=cc, n_file=len(fs), **mc, F1_nb=met(sum(pp_cnt[code][f][1] for f in fs))["F1"]))
+    # Δ so với B0: bootstrap ghép cặp theo file test (cùng file lấy mẫu cho cả hai cấu hình)
+    picks = [rng.choice(test, len(test), replace=True) for _ in range(A.n_boot)]
+    for r_ in pp_rows:
+        dd = []
+        for pk in picks:
+            a_ = met(sum(pp_cnt[r_["Mã"]][f][0] for f in pk)); b_ = met(sum(pp_cnt["B0"][f][0] for f in pk))
+            dd.append((a_["F1"] - b_["F1"], a_["DCF"] - b_["DCF"]))
+        dd = np.array(dd, float); lo_, hi_ = np.nanpercentile(dd, [2.5, 97.5], axis=0)
+        r_.update(dF1=r_["F1"] - pp_rows[0]["F1"], dF1_CI_lo=lo_[0], dF1_CI_hi=hi_[0], P_dF1_gt0=float(np.nanmean(dd[:, 0] > 0)),
+                  dDCF=r_["DCF"] - pp_rows[0]["DCF"], dDCF_CI_lo=lo_[1], dDCF_CI_hi=hi_[1])
+pp = pd.DataFrame(pp_rows); pp_cat = pd.DataFrame(pp_cat_rows)
+if len(pp):
+    pp.to_csv(OUT / "pp_compare.csv", index=False, encoding="utf-8-sig"); pp_cat.to_csv(OUT / "pp_compare_category.csv", index=False, encoding="utf-8-sig")
+    bestr = pp.loc[pp.DCF.idxmin() if A.criterion == "DCF-min" else pp.F1.idxmax()]
+    S.update(pp_compare=pp[["Mã", "Cấu_hình", "Ngưỡng_dev", "F1", "F1_nb", "DCF", "MR", "FAR", "AUC_hop_bin", "dF1", "dF1_CI_lo", "dF1_CI_hi",
+                            "dDCF", "dDCF_CI_lo", "dDCF_CI_hi"]].to_dict("records"),
+             pp_best_on_test=str(bestr["Mã"]), pp_tuner=tuner, pp_tune_best=(COMPARE[-1][2] if tuner else None))
+else:
+    for n_ in ("pp_compare.csv", "pp_compare_category.csv"): (OUT / n_).unlink(missing_ok=True)
+
 # =============== Nhãn đáng ngờ: đoạn bin liền nhau (không sát biên) mà điểm và nhãn trái ngược mạnh ===============
 sus = []
 for f, d in recs.items():
@@ -886,6 +1052,23 @@ fig.suptitle(f"Độ dài đoạn speech / khoảng lặng so với frame nhãn 
 fig.legend(*ax[1, -1].get_legend_handles_labels(), loc="lower center", ncol=5, fontsize=8)
 plt.tight_layout(rect=(0, 0.04, 1, 1)); plt.savefig(OUT / "fig6_do_dai_doan.png", dpi=130); plt.close()
 
+# Hình 7: so sánh phương án hậu xử lý (test): Δ F1 và Δ DCF so với B0, CI 95% bootstrap ghép cặp theo file
+if len(pp):
+    fig, ax = plt.subplots(1, 2, figsize=(14, 0.42 * len(pp) + 1.6), sharey=True)
+    yy_ = np.arange(len(pp))[::-1]; lab_ = [f"{r.Mã}  {r.Cấu_hình}" for r in pp.itertuples()]
+    for a_, k, good, ttl in ((ax[0], "dF1", 1, "Δ F1 so với B0 (test, cao = tốt)"), (ax[1], "dDCF", -1, f"Δ DCF so với B0 (test, thấp = tốt; miss {A.dcf_miss:g})")):
+        v, lo_, hi_ = pp[k].to_numpy(float), pp[f"{k}_CI_lo"].to_numpy(float), pp[f"{k}_CI_hi"].to_numpy(float)
+        better, worse = (lo_ > 0, hi_ < 0) if good > 0 else (hi_ < 0, lo_ > 0)      # CI nằm hẳn một phía của 0
+        col = np.where(better, C3, np.where(worse, PALETTE[7], "#8a8984"))          # xanh = tốt hơn B0, đỏ = kém hơn, xám = chưa rõ
+        a_.hlines(yy_, lo_, hi_, color=col, lw=2.2); a_.scatter(v, yy_, color=col, s=28, zorder=3)
+        a_.axvline(0, c="#52514e", lw=0.8); a_.set_title(ttl, fontsize=9)
+        for y0, x0 in zip(yy_, v): a_.text(x0, y0 + 0.22, f"{x0:+.3f}", ha="center", fontsize=7, color="#3b3a37")
+    ax[0].set_yticks(yy_); ax[0].set_yticklabels(lab_, fontsize=8)
+    fig.suptitle(f"So sánh phương án hậu xử lý trên test ({len(test)} file); ngưỡng chọn riêng cho từng cấu hình trên dev ({A.criterion}). "
+                 f"B0: F1 {pp.F1.iloc[0]:.3f}, DCF {pp.DCF.iloc[0]:.3f}\n"
+                 "Vạch = CI 95% bootstrap ghép cặp theo file. Xanh = tốt hơn B0, đỏ = kém hơn B0, xám = chưa phân biệt được", fontsize=10)
+    plt.tight_layout(); plt.savefig(OUT / "fig7_so_sanh_hau_xu_ly.png", dpi=130); plt.close()
+
 pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
 print("Dữ liệu:", json.dumps(S["meta"], ensure_ascii=False, indent=1))
 print(json.dumps({k: S[k] for k in ["n_pairs", "problems", "n_struct_flag", "struct_flag_files", "best_shift_center", "best_shift_auc",
@@ -897,6 +1080,9 @@ print(json.dumps({k: S[k] for k in ["n_pairs", "problems", "n_struct_flag", "str
 for name, df in [("Nhất quán nhãn", lab_cat), ("Tầng A (nhãn chính)", tA), ("Tầng A (nhãn --gt-alt)", tA_alt),
                  ("Ngưỡng: chọn ở đâu -> kết quả trên test", transfer), ("Tầng B (A4)", tB), ("Chỉ số theo đoạn (test, A4)", ev_thr),
                  ("Ablation", abl), ("Category (test, A4)", cat_df),
+                 ("So sánh phương án hậu xử lý (test; Δ so với B0, CI 95% bootstrap)",
+                  pp[["Mã", "Cấu_hình", "Ngưỡng_dev", "MR", "FAR", "F1", "F1_nb", "DCF", "AUC_hop_bin", "event_F1", "n_pred_seg",
+                      "dF1", "dF1_CI_lo", "dF1_CI_hi", "dDCF"]] if len(pp) else None),
                  ("Đặc trưng tập theo độ phân giải model (tất cả file)", profile[profile.split == "tất cả"][["Category", "n_file", "minutes"] + PROF_KEYS])]:
     if df is not None and len(df): print(f"\n=== {name} ==="); print(df.round(4).to_string(index=False))
 print("\nĐặc trưng lệch dev/test > 10 điểm %:", "; ".join(flags) if flags else "(không có)")

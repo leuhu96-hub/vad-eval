@@ -44,40 +44,118 @@ def bin_scores(m, n_bins, shift=0.0):
     ok = np.flatnonzero(~np.isnan(out))
     return np.interp(np.arange(n_bins), ok, out[ok]) if len(ok) else np.zeros(n_bins)
 
-OVERLAP_DESC = {"tri": "trọng số tam giác theo tâm cửa sổ", "mean": "trung bình các cửa sổ phủ hop",
-                "max": "max các cửa sổ phủ hop", "median": "median các cửa sổ phủ hop",
-                "nearest": "cửa sổ có tâm gần hop nhất"}
+OVERLAP_DESC = {"tri": "trọng số tam giác theo tâm cửa sổ", "hann": "trọng số Hann theo tâm cửa sổ",
+                "mean": "trung bình các cửa sổ phủ hop", "max": "max các cửa sổ phủ hop",
+                "median": "median các cửa sổ phủ hop", "nearest": "cửa sổ có tâm gần hop nhất"}
+SMOOTH_DESC = {"mean": "trung bình", "median": "median trượt", "gauss": "Gauss"}
 
-def rescore_hop(m, dur=DUR, weight=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH):
+def _logit(p): p = np.clip(p, 1e-6, 1 - 1e-6); return np.log(p / (1 - p))
+
+def smooth_scores(x, n, kind="mean"):
+    """Làm mượt chuỗi điểm theo hop, cửa sổ n hop (n = 1: giữ nguyên); đầu/cuối file chỉ dùng các hop có sẵn.
+    mean  : trung bình trượt n hop
+    median: median trượt n hop (giữ biên sắc hơn mean, bỏ được gai đơn lẻ)
+    gauss : trung bình có trọng số Gauss trên n hop, sigma = n / 4"""
+    n = int(n); x = np.asarray(x, float)
+    if n <= 1 or len(x) == 0: return x
+    if kind == "median":
+        h = n // 2; xp = np.r_[np.full(h, np.nan), x, np.full(n - 1 - h, np.nan)]
+        return np.nanmedian(np.lib.stride_tricks.sliding_window_view(xp, n), axis=1)
+    if kind == "gauss":
+        u = np.arange(n) - (n - 1) / 2; k = np.exp(-0.5 * (u / (n / 4)) ** 2)
+    elif kind == "mean": k = np.ones(n)
+    else: raise ValueError(f"smooth kind phải là một trong {list(SMOOTH_DESC)}")
+    return np.convolve(x, k, "same") / np.convolve(np.ones(len(x)), k, "same")
+
+def rescore_hop(m, dur=DUR, weight=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH, smooth_kind="mean", domain="prob"):
     """Điểm mỗi hop 0.08s từ các cửa sổ 0.96s phủ tâm hop.
     weight="tri"    : trọng tâm tam giác - trọng số 1 - |t - tâm cửa sổ| / 0.48 (1 ở tâm, về 0 ở mép cửa sổ)
+    weight="hann"   : trọng số Hann 0.5·(1 + cos(π·|t - tâm| / 0.48)) - giảm mép mạnh hơn tam giác
     weight="mean"   : trung bình đều (cách cũ)
     weight="max" / "median": max / median các cửa sổ phủ hop
     weight="nearest": chỉ lấy cửa sổ có tâm gần tâm hop nhất (không gộp)
-    smooth=5        : trung bình trượt 5 hop (2 trước, 2 sau và chính nó); đầu/cuối file lấy các hop có sẵn.
-                      smooth=1 là không làm mượt."""
+    domain="logit"  : gộp tri / hann / mean trong miền log-odds rồi đổi lại xác suất (prob = gộp trực tiếp xác suất)
+    smooth=5        : làm mượt 5 hop (2 trước, 2 sau và chính nó) kiểu smooth_kind (mean / median / gauss);
+                      smooth=1 là không làm mượt.
+    Cửa sổ không cần cách đều 0.08 s (vd giữ 1/2 cửa sổ để mô phỏng hop 0.16 s)."""
     if weight not in OVERLAP_DESC: raise ValueError(f"weight phải là một trong {list(OVERLAP_DESC)}")
+    if domain not in ("prob", "logit"): raise ValueError("domain phải là prob hoặc logit")
     n = int(round(dur / HOP)); c = (np.arange(n) + 0.5) * HOP
     st = m["start"].to_numpy(); sc = m["score"].to_numpy(); out = np.full(n, np.nan)
+    lg = domain == "logit" and weight in ("tri", "hann", "mean")
+    if lg: sc = _logit(sc)
     for i, t in enumerate(c):
         mk = (st <= t) & (t < st + WIN)
         if not mk.any(): continue
         s, d = sc[mk], np.abs(t - (st[mk] + HALF_WIN))            # điểm và khoảng cách tới tâm từng cửa sổ
-        if weight == "tri":
-            w = 1 - d / HALF_WIN; out[i] = np.sum(w * s) / np.sum(w) if np.sum(w) > 0 else s.mean()
+        if weight in ("tri", "hann"):
+            w = 1 - d / HALF_WIN if weight == "tri" else 0.5 * (1 + np.cos(np.pi * np.minimum(d / HALF_WIN, 1)))
+            out[i] = np.sum(w * s) / np.sum(w) if np.sum(w) > 0 else s.mean()
         elif weight == "mean": out[i] = s.mean()
         elif weight == "max": out[i] = s.max()
         elif weight == "median": out[i] = np.median(s)
         else: out[i] = s[np.argmin(d)]
+    if lg: out = 1 / (1 + np.exp(-out))
     ok = np.flatnonzero(~np.isnan(out))
     out = np.interp(np.arange(n), ok, out[ok]) if len(ok) else np.zeros(n)
-    if smooth > 1:
-        k = np.ones(int(smooth)); out = np.convolve(out, k, "same") / np.convolve(np.ones(n), k, "same")
-    return out
+    return smooth_scores(out, smooth, smooth_kind)
 
-def rescore_desc(weight=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH):
+def rescore_desc(weight=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH, smooth_kind="mean", domain="prob"):
     """Mô tả ngắn cách gộp overlap, dùng trong báo cáo."""
-    return OVERLAP_DESC[weight] + (f" + làm mượt trung bình {smooth} hop" if smooth > 1 else "")
+    return (OVERLAP_DESC[weight] + (" (miền logit)" if domain == "logit" and weight in ("tri", "hann", "mean") else "")
+            + (f" + làm mượt {SMOOTH_DESC[smooth_kind]} {smooth} hop" if smooth > 1 else ""))
+
+# ---------------- quyết định + hậu xử lý đoạn (các phương án tối ưu) ----------------
+def hysteresis(s, on, off=None):
+    """Ngưỡng kép kiểu Silero / pyannote: bắt đầu speech khi s >= on, chỉ kết thúc khi s < off (off <= on).
+    off = None hoặc off >= on: ngưỡng đơn s >= on. O(n), không vòng lặp Python."""
+    s = np.asarray(s, float)
+    if off is None or off >= on: return s >= on
+    keep, start = s >= off, s >= on; idx = np.arange(len(s))
+    last_break = np.maximum.accumulate(np.where(~keep, idx, -1))      # vị trí gần nhất điểm rơi dưới off
+    last_on = np.maximum.accumulate(np.where(start, idx, -1))         # vị trí gần nhất điểm vượt on
+    return keep & (last_on > last_break)
+
+ORDER_DESC = {"pdm": "pad → drop → merge", "mdp": "merge → drop → pad"}
+
+def postprocess_segs(segs, pre, post, gap, drop=0.0, dur=DUR, order="pdm"):
+    """Hậu xử lý danh sách đoạn [start, end] đã sắp xếp, không chồng nhau.
+    order="pdm": pad -> drop (độ dài sau pad) -> merge (cách hiện tại, = pad_merge)
+    order="mdp": merge (gap đo trên đoạn chưa pad) -> drop (độ dài chưa pad) -> pad -> gộp đoạn chồng nhau sau pad
+                 (pyannote / SpeechBrain merge trước drop; Silero đo min speech trước pad)
+    pre / post được phép âm (co đoạn); đoạn co về độ dài <= 0 bị bỏ."""
+    def merge(s, g):
+        out = []
+        for a, b in s:
+            if out and a - out[-1][1] < g - 1e-9: out[-1][1] = max(out[-1][1], b)
+            else: out.append([a, b])
+        return out
+    def pad(s): return [x for x in ([max(0.0, a - pre), min(dur, b + post)] for a, b in s) if x[1] - x[0] > 1e-9]
+    s = sorted([float(a), float(b)] for a, b in segs)
+    if order == "pdm":
+        s = pad(s)
+        if drop > 0: s = [x for x in s if x[1] - x[0] >= drop - 1e-9]
+        return merge(s, gap)
+    if order != "mdp": raise ValueError(f"order phải là một trong {list(ORDER_DESC)}")
+    s = merge(s, gap)
+    if drop > 0: s = [x for x in s if x[1] - x[0] >= drop - 1e-9]
+    return merge(pad(s), 0.0)
+
+def segs_to_bins_fast(segs, n_bins):
+    """Như segs_to_bins (bin speech khi đoạn phủ >= 50% bin) nhưng O(số đoạn + số bin); đoạn phải không chồng nhau."""
+    if not len(segs): return np.zeros(n_bins, int)
+    s = np.asarray(segs, float); a, b = s[:, 0], s[:, 1]; cum = np.r_[0.0, np.cumsum(b - a)]
+    def F(t):   # tổng thời lượng speech trong [0, t)
+        j = np.searchsorted(a, t, side="right") - 1; jj = np.maximum(j, 0)
+        return np.where(j >= 0, cum[jj] + np.clip(t - a[jj], 0, b[jj] - a[jj]), 0.0)
+    lo = np.arange(n_bins) * BIN
+    return ((F(lo + BIN) - F(lo)) / BIN >= 0.5 - 1e-9).astype(int)
+
+def frames_to_bin_scores(fr, n_bins):
+    """Điểm mỗi bin 0.5 s = trung bình điểm hop 0.08 s theo phần thời gian chồng lấp (lưới 0.02 s: hop 4 ô, bin 25 ô)."""
+    g = np.repeat(np.asarray(fr, float), int(round(HOP / FINE))); need = n_bins * int(round(BIN / FINE))
+    g = g[:need] if len(g) >= need else np.r_[g, np.full(need - len(g), g[-1] if len(g) else 0.0)]
+    return g.reshape(n_bins, -1).mean(1)
 
 def frames_to_segs(b, step):
     segs, i, n = [], 0, len(b)

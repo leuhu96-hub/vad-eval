@@ -61,10 +61,12 @@ P, D3, NA = "0.0%", "0.000", "—"
 
 wb = load_workbook(a.template)
 NEW = ["KQ du lieu that", "Hinh du lieu that", "DL quet nguong", "DL ROC", "DL theo file", "DL nhan va phan bo", "DL do lech bien"]
-for n in NEW + ["Bieu do du lieu that", "DL doan va timeline", "Dac trung tap danh gia"]:
+for n in NEW + ["Bieu do du lieu that", "DL doan va timeline", "Dac trung tap danh gia", "So sanh hau xu ly"]:
     if n in wb.sheetnames: del wb[n]
 kq, hd, dq, dr, dfs, dn, dt = (wb.create_sheet(n) for n in NEW)
 dct = wb.create_sheet("Dac trung tap danh gia") if HAS_PROF else None
+HAS_PP = (R / "pp_compare.csv").exists()            # so sánh phương án hậu xử lý (evaluate_real.py mục 6; kết quả cũ không có)
+dpp = wb.create_sheet("So sanh hau xu ly") if HAS_PP else None
 KQ, DQ, DR, DF, DN, DT = (f"'{s.title}'" for s in (kq, dq, dr, dfs, dn, dt))   # tên sheet có dấu cách -> để trong nháy
 
 
@@ -526,6 +528,71 @@ if HAS_PROF:
         dct.add_image(img, f"A{r + 1}")
     dct.freeze_panes = "C6"
 
+# ======================= So sanh hau xu ly (nếu evaluate_real.py có xuất) =======================
+if HAS_PP:
+    pp = pd.read_csv(R / "pp_compare.csv"); ppc = pd.read_csv(R / "pp_compare_category.csv")
+    tune = pd.read_csv(R / "pp_tune_trials.csv") if (R / "pp_tune_trials.csv").exists() else None
+    crit = PR("criterion", "DCF-min")
+    title(dpp, "So sánh phương án hậu xử lý",
+          f"{SRC} Ngưỡng chọn riêng cho từng cấu hình trên dev ({crit}), đánh giá một lần trên test. B0 = cấu hình hiện tại. "
+          "Δ so với B0 kèm CI 95% bootstrap ghép cặp theo file; xanh = tốt hơn B0, đỏ = kém hơn (CI không chứa 0). Số từ Python (chữ xanh).")
+    GOOD, BAD = PatternFill("solid", fgColor="E2EFDA"), PatternFill("solid", fgColor="FCE4D6")
+    COLS_PP = [("Mã", None), ("Cấu_hình", None), ("Chi_tiết", None), ("Ngưỡng_dev", "0.00"), ("Ngưỡng_off", "0.00"), ("MR", P), ("FAR", P),
+               ("Precision", P), ("Recall", P), ("F1", D3), ("F1_nb", D3), ("DCF", D3), ("AUC_hop_bin", D3), ("event_F1", D3),
+               ("n_pred_seg", None), ("so_lan_chay_model", None), ("dF1", "+0.000;-0.000;0.000"), ("dF1_CI_lo", "+0.000;-0.000;0.000"),
+               ("dF1_CI_hi", "+0.000;-0.000;0.000"), ("P_dF1_gt0", P), ("dDCF", "+0.000;-0.000;0.000"), ("dDCF_CI_lo", "+0.000;-0.000;0.000"),
+               ("dDCF_CI_hi", "+0.000;-0.000;0.000")]
+    NAMES = ["Mã", "Cấu hình", "Chi tiết", "Ngưỡng dev", "Ngưỡng tắt (ngưỡng kép)", "MR", "FAR", "Precision", "Recall", "F1", "F1 bỏ bin biên",
+             f"DCF (miss {PR('dcf_miss', 0.75)})", "AUC điểm hop→bin", "event-F1", "Số đoạn dự đoán", "Số lần chạy model",
+             "ΔF1", "ΔF1 CI thấp", "ΔF1 CI cao", "P(ΔF1 > 0)", "ΔDCF", "ΔDCF CI thấp", "ΔDCF CI cao"]
+    r = 4; sec(dpp, r, f"a. Kết quả trên test ({S.get('n_test', '')} file); tốt nhất trên test theo {crit}: {S.get('pp_best_on_test', '')} "
+                       "(chỉ để tham khảo – chọn cấu hình theo dev, không theo test)")
+    head(dpp, r + 1, NAMES)
+    for i, row in enumerate(pp.itertuples(index=False), r + 2):
+        d_ = row._asdict()
+        for j, (k, fmt) in enumerate(COLS_PP, 1):
+            if k not in d_: w(dpp, i, j, None); continue
+            fill = None
+            if k == "dF1": fill = GOOD if d_["dF1_CI_lo"] > 0 else BAD if d_["dF1_CI_hi"] < 0 else None
+            if k == "dDCF": fill = GOOD if d_["dDCF_CI_hi"] < 0 else BAD if d_["dDCF_CI_lo"] > 0 else None
+            w(dpp, i, j, d_[k], fmt, blue=j > 3, left=j <= 3, fill=fill)
+    r = r + 2 + len(pp) + 1
+    PCAT = list(dict.fromkeys(ppc.Category))
+    for key, fmt, lab in (("F1", D3, "F1"), ("DCF", D3, "DCF"), ("MR", P, "MR"), ("FAR", P, "FAR")):
+        sec(dpp, r, f"b. {lab} theo category (test)"); head(dpp, r + 1, ["Mã"] + PCAT)
+        pv_ = ppc.pivot(index="Mã", columns="Category", values=key).reindex(pp["Mã"])
+        for i, (code, vals) in enumerate(pv_.iterrows(), r + 2):
+            w(dpp, i, 1, code, left=True)
+            for j, c in enumerate(PCAT, 2): w(dpp, i, j, vals[c], fmt, blue=True)
+        r = r + 2 + len(pv_) + 1
+    if tune is not None and len(tune):
+        sk = "dev_DCF" if crit == "DCF-min" else "dev_F1"
+        top = tune.sort_values(sk, ascending=crit == "DCF-min").head(20)
+        sec(dpp, r, f"c. Tìm cấu hình trên dev ({len(tune)} lần thử, {S.get('pp_tuner', '')}): 20 lần tốt nhất theo {crit} trên dev; "
+                    "dòng T ở bảng a là lần tốt nhất, đánh giá một lần trên test")
+        TC = [c for c in top.columns if c != "trial"]
+        head(dpp, r + 1, TC)
+        for i, row in enumerate(top[TC].itertuples(index=False), r + 2):
+            for j, v in enumerate(row, 1): w(dpp, i, j, v, D3 if isinstance(v, float) and TC[j - 1].startswith("dev_") else None, blue=True)
+        r = r + 2 + len(top) + 1
+    sec(dpp, r, "d. Cách đọc")
+    for i, t in enumerate([
+            "B0: cấu hình hiện tại (trọng số tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 ms → drop → merge < 500 ms). C1–C7: B0 + đúng một thay đổi.",
+            "R: cấu hình đề xuất (median 3 hop, ngưỡng kép Δ 0.15, merge < 500 ms → drop < 320 ms đo trước pad → pad 0/0). R-h16 / R-h24: như R nhưng chỉ "
+            "giữ 1/2 hoặc 1/3 cửa sổ (mô phỏng hop 0.16 / 0.24 s, giảm số lần chạy model).",
+            "T (nếu có --tune): cấu hình tốt nhất trên dev. Lần thử càng nhiều càng dễ khớp riêng dev – tin T khi nó cũng tốt trên test và ở nhiều category.",
+            "AUC điểm hop→bin chỉ đổi theo cách gộp cửa sổ / làm mượt / hop; ngưỡng kép, pad, drop, merge không đổi AUC – so các bước này bằng F1 / DCF.",
+            "Δ có CI chứa 0 (không tô màu): chưa đủ bằng chứng để nói khác B0 với số file test hiện có.",
+            "Chạy lại với cấu hình khác: python evaluate_real.py --root <root> --out <thư mục> --preset de-xuat (hoặc --hyst / --order / --smooth-kind ...)."], r + 1):
+        c = dpp.cell(i, 1, t); c.font = FN_
+    dpp.column_dimensions["A"].width = 8; dpp.column_dimensions["B"].width = 42; dpp.column_dimensions["C"].width = 70
+    for c in range(4, 4 + len(NAMES)): dpp.column_dimensions[L(c)].width = 11
+    if (R / "fig7_so_sanh_hau_xu_ly.png").exists():
+        r = r + 9; sec(dpp, r, "e. Δ so với B0 (hình Python, fig7_so_sanh_hau_xu_ly.png)")
+        img = XLImage(str(R / "fig7_so_sanh_hau_xu_ly.png")); k = 1100 / img.width; img.width, img.height = 1100, int(img.height * k)
+        dpp.add_image(img, f"A{r + 1}")
+    dpp.freeze_panes = "D6"
+
 # ======================= Hinh du lieu that (vẽ bằng Python) =======================
 title(hd, "Hình – đánh giá (vẽ bằng Python)",
       f"{SRC} Hình cố định ở ngưỡng Python {THR} (A4); đổi tham số ở KQ du lieu that không đổi hình – chạy lại evaluate_real.py.")
@@ -533,7 +600,8 @@ r = 4
 for f, t in [("fig1_kiem_tra_du_lieu.png", "Hình 1. Kiểm tra dữ liệu"), ("fig2_tang_A.png", "Hình 2. Tầng A (test)"),
              ("fig3_tang_B.png", "Hình 3. Ngưỡng và tầng B"), ("fig4_timeline.png", "Hình 4. Timeline mẫu (test)"),
              ("fig5_dac_trung_tap.png", "Hình 5. Đặc trưng tập theo độ phân giải model"),
-             ("fig6_do_dai_doan.png", "Hình 6. Độ dài đoạn speech / khoảng lặng so với frame 0.5 s")]:
+             ("fig6_do_dai_doan.png", "Hình 6. Độ dài đoạn speech / khoảng lặng so với frame 0.5 s"),
+             ("fig7_so_sanh_hau_xu_ly.png", "Hình 7. So sánh phương án hậu xử lý (Δ so với B0)")]:
     if not (R / f).exists(): continue
     sec(hd, r, t)
     img = XLImage(str(R / f)); k = 1100 / img.width; img.width, img.height = 1100, int(img.height * k)

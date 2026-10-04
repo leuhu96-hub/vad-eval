@@ -33,11 +33,18 @@ Tinh chỉnh (mặc định = cấu hình hiện tại; giá trị đã dùng đ
 
 | Tham số | Mặc định | Ý nghĩa |
 |---|---|---|
-| `--overlap tri\|mean\|max\|median\|nearest` | tri | Gộp điểm các cửa sổ chồng nhau thành điểm mỗi hop 0.08 s (Ablation mục B: O4, O1, O2, O3, O0) |
-| `--smooth N` | 5 | Làm mượt trung bình trượt N hop; 1 = không |
-| `--pad-pre`, `--pad-post` | 0.10, 0.12 | Nới đầu / cuối đoạn speech (giây) |
+| `--preset hien-tai\|de-xuat` | hien-tai | Bộ tham số hậu xử lý. `de-xuat` = median 3 hop, `--hyst 0.15`, `--order mdp`, pad 0/0, merge 0.5 s, drop 0.32 s. Tham số ghi rõ vẫn ghi đè preset |
+| `--overlap tri\|hann\|mean\|max\|median\|nearest` | tri | Gộp điểm các cửa sổ chồng nhau thành điểm mỗi hop 0.08 s (Ablation mục B: O4, O1, O2, O3, O0). `hann` giảm trọng số mép cửa sổ mạnh hơn tam giác |
+| `--domain prob\|logit` | prob | Gộp tri / hann / mean trên xác suất hay trên log-odds |
+| `--smooth N` | 5 | Làm mượt N hop; 1 = không |
+| `--smooth-kind mean\|median\|gauss` | mean | Kiểu làm mượt. median giữ biên sắc, bỏ gai đơn lẻ; gauss: sigma = N/4 |
+| `--hyst D` | 0 | Ngưỡng kép: bắt đầu speech khi điểm ≥ ngưỡng, chỉ kết thúc khi < ngưỡng − D (như Silero, pyannote). 0 = ngưỡng đơn |
+| `--order pdm\|mdp` | pdm | Thứ tự ở A4. pdm = pad → drop → merge (hiện tại). mdp = merge → drop → pad: merge trên đoạn chưa pad, drop đo độ dài trước pad |
+| `--pad-pre`, `--pad-post` | 0.10, 0.12 | Nới đầu / cuối đoạn speech (giây); âm = co đoạn |
 | `--merge-gap` | 0.50 | Gộp hai đoạn cách nhau ít hơn N giây |
-| `--drop` | 0 | Bỏ đoạn ngắn hơn N giây (padding → drop → merge), chỉ ở A4 |
+| `--drop` | 0 | Bỏ đoạn ngắn hơn N giây, chỉ ở A4 (pdm: đo sau pad; mdp: đo trước pad) |
+| `--no-compare` | | Bỏ mục 6 (so sánh phương án hậu xử lý) |
+| `--tune N`, `--tune-seed` | 0, 0 | Tìm cấu hình hậu xử lý tốt nhất trên dev với N lần thử (Optuna TPE nếu đã cài `optuna`, không thì tìm ngẫu nhiên) |
 | `--criterion DCF-min\|F1-max` | DCF-min | Tiêu chí chọn ngưỡng trên dev (Excel lấy làm mặc định ô B8) |
 | `--dcf-miss` | 0.75 | Trọng số miss trong DCF (Excel lấy làm mặc định ô B6) |
 | `--thr-min`, `--thr-max`, `--thr-step` | 0.01, 0.95, 0.01 | Dải quét ngưỡng |
@@ -60,6 +67,41 @@ Kết quả:
   - Các sheet template (Bao cao category, Ablation, KPI va Gate, Snapshot, Kiem tra du lieu…) liên kết bằng
     công thức tới KQ du lieu that; chỉ ghi ô vàng/xám, giữ nguyên công thức của template.
   - Số chỉ Python tính được (CI bootstrap, event-F1, Δbiên, AUC chính xác) giữ là số, chữ xanh, có ghi chú.
+
+## So sánh phương án hậu xử lý (evaluate_real.py mục 6)
+
+Mặc định evaluate_real.py chạy thêm mục này (tắt bằng `--no-compare`). Cơ sở của các phương án:
+[vad_post_processing.md](vad_post_processing.md) và báo cáo tối ưu hậu xử lý.
+
+    python evaluate_real.py --root <root> --out results_test --tune 300                 # so sánh + tìm cấu hình trên dev
+    python evaluate_real.py --root <root> --out results_dexuat --preset de-xuat         # cả báo cáo (A0–A4, Excel) theo cấu hình đề xuất
+    python make_excel_real.py --res results_test --out results/Tong_hop_danh_gia_VAD_test.xlsx   # thêm sheet "So sanh hau xu ly"
+
+Cách làm:
+- Mỗi cấu hình đi trọn pipeline: gộp cửa sổ → làm mượt → ngưỡng (đơn / kép) → đoạn → merge / drop / pad → bin 0.5 s.
+- Ngưỡng được chọn riêng cho từng cấu hình trên dev (`--criterion`), rồi đánh giá một lần trên test.
+- Δ so với B0 có CI 95% bootstrap ghép cặp theo file test: cùng một mẫu file dùng cho cả hai cấu hình, nên khác biệt nhỏ vẫn đo được.
+
+| Mã | Cấu hình |
+|---|---|
+| B0 | Cấu hình hiện tại: tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 → drop → merge < 500 ms. Luôn cố định (không theo `--preset`), để các lần chạy so được với nhau |
+| CLI | Tham số dòng lệnh, chỉ hiện khi khác B0 và R |
+| C1–C7 | B0 + đúng một thay đổi: ngưỡng kép Δ 0.15 / merge → drop 0.32 s → pad / pad 0/0 / median 3 hop / không làm mượt / Hann / miền logit |
+| R | Đề xuất (`--preset de-xuat`) |
+| R-h16, R-h24 | Như R nhưng chỉ giữ 1/2, 1/3 cửa sổ: mô phỏng hop 0.16 / 0.24 s, giảm 2–3× số lần chạy model (CPU, pin) |
+| T | Có `--tune N`: cấu hình tốt nhất trên dev. N càng lớn càng dễ khớp riêng dev, nên chỉ tin T khi test và các category cũng tốt |
+
+Đọc kết quả:
+- AUC (cột `AUC_hop_bin`) chỉ đổi theo cách gộp, làm mượt và hop. Ngưỡng kép, pad, drop, merge không đổi AUC, nên các bước này phải so bằng F1, DCF, MR, FAR.
+- CI của Δ chứa 0: chưa đủ bằng chứng để nói khác B0 với số file test hiện có.
+- Chọn cấu hình theo dev và theo nhiều category. Không chọn theo hàng tốt nhất trên test.
+
+Output:
+- `pp_compare.csv`: mỗi cấu hình một dòng gồm ngưỡng dev, MR, FAR, Precision, Recall, F1, F1 bỏ bin biên, DCF, AUC, event-F1, số đoạn, ΔF1 / ΔDCF và CI.
+- `pp_compare_category.csv`: như trên, theo category.
+- `pp_tune_trials.csv`: mọi lần thử của `--tune`.
+- `fig7_so_sanh_hau_xu_ly.png`.
+- Khoá `pp_*` trong summary.json.
 
 ## Đặc trưng tập đánh giá theo độ phân giải model
 
@@ -166,6 +208,9 @@ Các ví dụ số lấy từ bộ test (`results_test/`).
 
 - vadlib.py: đọc file, gom bin 0.5s, hậu xử lý (rescore hop, pad, merge, rebin), metric, đặc trưng tập theo độ phân giải
   model (window_frac, oracle_model, run_lengths, dist_to_transition, centers_per_bin).
+  Các phương án hậu xử lý tối ưu: `smooth_scores` (mean / median / gauss), `hysteresis` (ngưỡng kép),
+  `postprocess_segs` (thứ tự pdm / mdp, pad âm), `segs_to_bins_fast`, `frames_to_bin_scores`;
+  `rescore_hop` thêm `weight="hann"`, `smooth_kind`, `domain="logit"`.
   Đọc được output model cả dạng 'idx, start, end, score' lẫn 'start end score'.
   rescore_hop (gộp điểm các cửa sổ chồng nhau thành điểm mỗi hop 0.08 s, dùng cho A1–A4): mặc định trọng số
   tam giác theo tâm cửa sổ + làm mượt trung bình 5 hop. Đổi ở RESCORE_WEIGHT / RESCORE_SMOOTH đầu file
