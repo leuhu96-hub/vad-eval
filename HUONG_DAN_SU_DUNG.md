@@ -29,21 +29,15 @@ Mục lục
 | `vadlib.py` | Thư viện chung: đọc file, rescore, ngưỡng, hậu xử lý, metric | Được các script trên import; dùng được trong code riêng |
 | `gen_data.py`, `evaluate.py`, `make_excel.py` | Demo trên dữ liệu giả định 10 s | Học quy trình, thử code |
 | `vad_post_processing.md` | Mô tả các bước hậu xử lý (Rebin, threshold, padding, drop, merge) | Tham khảo |
+| `docs/make_figures.py` | Vẽ lại các sơ đồ / hình minh hoạ của tài liệu này vào `docs/img/` | Khi sửa tài liệu hoặc đổi hàm hậu xử lý |
 
 Luồng dữ liệu:
 
-```mermaid
-flowchart LR
-    AU["audio/*.wav"] --> AL["auto_label.py<br/>(tuỳ chọn)"]
-    AL --> GT["Ground_truth/<br/>nhãn 0.5 s"]
-    AL --> CA["cache Silero<br/>(người gán 2)"]
-    M["Model/*.txt<br/>điểm mỗi cửa sổ 0.96 s"] --> EV["evaluate_real.py"]
-    GT --> EV
-    CA -.-> EV
-    EV --> RS["results_xxx/<br/>csv, json, hình"]
-    RS --> XL["make_excel_real.py"]
-    XL --> X["Tong_hop_...xlsx"]
-```
+![Các phần của vad-eval và dữ liệu đi qua chúng](docs/img/01_luong_cong_viec.png)
+
+> Các sơ đồ và hình minh hoạ trong tài liệu này được vẽ bằng `python docs/make_figures.py` (hình hậu xử lý dùng đúng
+> các hàm của `vadlib.py`). Ảnh chụp Excel và các hình `docs/img/vi_du/` lấy từ một lần chạy trên dữ liệu giả định
+> của `gen_data.py`, nên con số chỉ để minh hoạ.
 
 ---
 
@@ -83,6 +77,8 @@ Mọi lệnh dưới đây chạy trong thư mục gốc của repo.
 - Thư mục có thể nằm sâu bên trong `<root>`; script chọn thư mục nông nhất khớp tên.
 - Nếu thư mục nằm chỗ khác, chỉ rõ bằng `--raw`, `--gt`, `--audio` thay cho `--root`.
 
+![Cấu trúc thư mục và cách ghép file theo tên](docs/img/02_cau_truc_thu_muc.png)
+
 ### 3.2 Ghép file
 
 Ba nguồn được ghép theo tên file, không phân biệt hoa thường, bỏ tiền tố / hậu tố nhãn (`Gt_`, `label_`, `_gt`...).
@@ -100,6 +96,11 @@ phẩy, dấu cách hoặc chấm phẩy:
 0, 0.00, 0.96, 0.031          # idx, start, end, score
 0.08 1.04 0.045               # start end score
 ```
+
+Output model và nhãn nằm trên hai lưới thời gian khác nhau. Toàn bộ phần hậu xử lý là để chuyển từ lưới của model
+(cửa sổ 0.96 s, hop 0.08 s) sang lưới của nhãn (bin 0.5 s):
+
+![Cửa sổ model 0.96 s / hop 0.08 s so với bin nhãn 0.5 s](docs/img/03_cua_so_va_bin.png)
 
 **Nhãn** — mỗi dòng `start end nhãn`, theo bin 0.5 s hoặc theo thời điểm bất kỳ:
 
@@ -172,6 +173,8 @@ Xem toàn bộ tham số: `python evaluate_real.py --help`.
 
 ### 5.2 Script làm gì (theo thứ tự)
 
+![Các mục của evaluate_real.py và file kết quả](docs/img/08_evaluate_real_cac_buoc.png)
+
 | Mục | Nội dung | Output chính |
 |---|---|---|
 | 5a | Ghép file model ↔ nhãn ↔ audio | `summary.json` → `problems` |
@@ -199,6 +202,22 @@ Các cấu hình A0–A4:
 | A2 | A1 + pad |
 | A3 | A1 + merge |
 | A4 | Cấu hình đầy đủ: pad + drop + merge, theo thứ tự `--order` — đây là cấu hình dùng cho tầng B và category |
+
+Hậu xử lý A4 trên một file mẫu, từng bước (cấu hình đề xuất, thứ tự merge → drop → pad):
+
+![Hậu xử lý từng bước trên một file mẫu 10 s](docs/img/04_hau_xu_ly_tung_buoc.png)
+
+Cách đọc hình:
+- Hàng trên: điểm model mỗi cửa sổ. Tiếng ho (6.7 s) tạo một gai điểm; đoạn nói nhỏ (8.6 s) làm điểm tụt.
+- Hàng giữa (① Rebin): 12 cửa sổ phủ mỗi hop 0.08 s được gộp bằng trọng số tam giác rồi làm mượt.
+- Hàng dưới, đọc từ trên xuống:
+  - ② Ngưỡng đơn cắt đôi câu cuối ở chỗ điểm tụt; ngưỡng kép (bật 0.60, tắt 0.45) giữ câu liền.
+  - ③ Merge lấp khoảng ngắt hơi < 0.5 s giữa hai câu đầu.
+  - ④ Drop bỏ đoạn ngắn do tiếng ho.
+  - ⑤ Pad nới hai đầu đoạn (cấu hình đề xuất dùng pad 0; hình dùng +80 ms để thấy rõ).
+  - Hàng cuối: bin 0.5 s so với nhãn. Ô cam (báo nhầm) và ô đỏ (bỏ sót) đều nằm sát biên đoạn.
+- Lưu ý: cửa sổ 0.96 s làm một gai điểm ngắn trải ra 0.3–0.5 s sau Rebin, nhất là khi dùng ngưỡng kép. Vì vậy nên
+  tune `--drop` (0.32–0.5 s) trên dev thay vì dùng một giá trị cố định.
 
 ### 5.3 Tham số
 
@@ -279,6 +298,10 @@ Sau khi chạy, màn hình in tóm tắt và các bảng chính. Nên xem theo t
 6. **Giới hạn do độ phân giải**: `dataset_profile.csv` → `oracle_A4_F1` là F1 của model hoàn hảo cùng cửa sổ 0.96 s qua hậu
    xử lý hiện tại. Khoảng cách từ F1 thật tới con số này mới là phần model còn cải thiện được.
 
+Cách phân loại lỗi trong tầng B và category (cột FEC, MSC, OVER, NDS):
+
+![Phân loại lỗi theo bin 0.5 s](docs/img/07_loai_loi.png)
+
 Hình:
 
 | Hình | Nội dung |
@@ -289,6 +312,36 @@ Hình:
 | `fig4_timeline.png` | Timeline mẫu: nhãn, điểm, dự đoán |
 | `fig5_dac_trung_tap.png`, `fig6_do_dai_doan.png` | Đặc trưng tập; cách đọc chi tiết ở README |
 | `fig7_so_sanh_hau_xu_ly.png` | ΔF1, ΔDCF của từng phương án hậu xử lý so với B0 |
+
+Ví dụ các hình (dữ liệu giả định; bấm vào để xem cỡ lớn):
+
+**Hình 1 – Kiểm tra dữ liệu.** Xem file có AUC thấp bất thường (1d), độ dịch làm AUC tăng (5e) và lag từng file
+trước khi tin các con số khác.
+
+![fig1](docs/img/vi_du/fig1_kiem_tra_du_lieu.png)
+
+**Hình 2 – Tầng A.** ROC, PR, DET theo category trên điểm thô. Category có đường ROC nằm thấp là nơi model phân
+biệt kém nhất, độc lập với ngưỡng.
+
+![fig2](docs/img/vi_du/fig2_tang_A.png)
+
+**Hình 3 – Ngưỡng và tầng B.** Trên trái: MR / FAR theo ngưỡng, vạch đen là ngưỡng đã chọn. Trên phải: lỗi biên
+(xanh) so với lỗi thật (cam) theo category. Dưới trái: độ lệch biên đoạn (âm = bắt đầu sớm). Dưới phải: DCF trên dev
+theo pad trước × merge gap; ô đậm nhất là cấu hình tốt nhất trong lưới.
+
+![fig3](docs/img/vi_du/fig3_tang_B.png)
+
+**Hình 4 – Timeline mẫu.** Nền xanh = nhãn speech, đường = điểm model, dải đen dưới = dự đoán A4. Dùng để xem
+model sai ở đâu trong file.
+
+![fig4](docs/img/vi_du/fig4_timeline.png)
+
+**Hình 5, 6 – Đặc trưng tập.** Đoạn / khoảng lặng ngắn hơn cửa sổ 0.96 s, cửa sổ lẫn, trần oracle (cách đọc chi
+tiết ở README).
+
+![fig5](docs/img/vi_du/fig5_dac_trung_tap.png)
+
+![fig6](docs/img/vi_du/fig6_do_dai_doan.png)
 
 ---
 
@@ -314,10 +367,24 @@ tốt hơn cấu hình hiện tại, và tốt hơn có thật không.
 | R-h16, R-h24 | Như R, chỉ giữ 1/2 hoặc 1/3 cửa sổ: mô phỏng hop 0.16 / 0.24 s, giảm 2–3× số lần chạy model |
 | T | Chỉ có khi `--tune N`: cấu hình tốt nhất tìm được trên dev |
 
+Hai thay đổi chính của cấu hình đề xuất, minh hoạ:
+
+**C1 – ngưỡng kép (`--hyst`).** Điểm dao động quanh ngưỡng (hay gặp ở hát, đám đông) làm ngưỡng đơn tạo ra nhiều đoạn
+vụn; ngưỡng kép chỉ tắt khi điểm xuống dưới ngưỡng − Δ.
+
+![Ngưỡng kép](docs/img/05_nguong_kep.png)
+
+**C2 – thứ tự merge → drop → pad (`--order mdp`).** Speech bị vỡ thành nhiều mẩu ngắn sát nhau sẽ bị drop từng mẩu
+nếu drop chạy trước merge; merge trước thì các mẩu được ghép lại, còn tiếng ho đứng riêng vẫn bị drop.
+
+![Thứ tự pdm và mdp](docs/img/06_thu_tu_pdm_mdp.png)
+
 Với mỗi cấu hình: ngưỡng được chọn riêng trên dev theo `--criterion`, rồi đánh giá một lần trên test.
 ΔF1 và ΔDCF so với B0 có CI 95% bootstrap ghép cặp theo file test.
 
 ### 6.2 Quy trình khuyến nghị
+
+![Quy trình chọn cấu hình hậu xử lý](docs/img/09_quy_trinh_hau_xu_ly.png)
 
 **Bước 1 — so sánh từng thay đổi** (lệnh mặc định đã có mục 6):
 
@@ -329,6 +396,13 @@ Mở `results_pp/fig7_so_sanh_hau_xu_ly.png` hoặc `pp_compare.csv`:
 - Dòng **xanh**: CI nằm hẳn bên phía tốt → tốt hơn B0 có ý nghĩa.
 - Dòng **đỏ**: kém hơn B0 có ý nghĩa.
 - Dòng **xám**: CI chứa 0 → chưa phân biệt được với số file test hiện có.
+
+![Cách đọc một dòng của Hình 7](docs/img/10_cach_doc_fig7.png)
+
+Ví dụ Hình 7 thật (dữ liệu giả định — trên dữ liệu này cấu hình đề xuất R kém B0, chỉ để minh hoạ cách đọc; kết luận
+phải lấy từ dữ liệu thật của bạn):
+
+![fig7](docs/img/vi_du/fig7_so_sanh_hau_xu_ly.png)
 
 **Bước 2 — tìm cấu hình trên dev**:
 
@@ -403,6 +477,10 @@ python make_excel_real.py --res results_real --run C:/vad_work/run1     # ghi ha
 - **Chữ xanh**: số nhập từ Python (không sửa tay).
 
 ### 7.3 Các sheet
+
+![Sheet KQ du lieu that có chú thích](docs/img/11_excel_kq_chu_thich.png)
+
+![Sheet So sanh hau xu ly có chú thích](docs/img/12_excel_so_sanh_chu_thich.png)
 
 | Sheet | Nội dung |
 |---|---|
