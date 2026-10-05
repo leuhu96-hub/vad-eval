@@ -140,7 +140,7 @@ def table_overview():
             ("3. Ngưỡng", "ngưỡng đơn 0.6026", "ngưỡng kép 0.60 / 0.45", "--hyst 0.15", "không bật tắt liên tục khi điểm dao động", "MR, số đoạn vụn", "≈ 0"),
             ("4. Thứ tự", "pad → drop → merge", "merge → drop → pad", "--order mdp", "ghép mẩu speech vỡ trước khi lọc", "MR (hát, đám đông)", "≈ 0"),
             ("5. Merge", "< 500 ms", "< 500 ms (tune 0.3–0.8)", "--merge-gap", "khớp độ phân giải nhãn 0.5 s", "FA ở khoảng lặng", "≈ 0"),
-            ("6. Drop", "0 (đo sau pad)", "0.32 s đo trước pad (tune 0.32–0.5)", "--drop 0.32", "bỏ gai do ho, gõ, nhạc", "FAR", "≈ 0"),
+            ("6. Drop", "0.32 s đo sau pad", "0.32 s đo trước pad (tune 0.32–0.5)", "--order mdp --drop 0.32", "đo trước pad mới bỏ được gai ngắn", "FAR", "≈ 0"),
             ("7. Pad", "100 / 120 ms", "0 / 0 (tune −0.16…+0.16)", "--pad-pre 0 --pad-post 0", "YAMNet đã nở biên ~0.48 s", "FAR ở biên", "≈ 0"),
             ("8. Hop cửa sổ", "0.08 s", "thử 0.16 / 0.24 s", "R-h16, R-h24 (mục 6)", "số lần chạy model giảm 2–3×", "AUC giảm nhẹ", "CPU ÷2–3")]
     cols = ["Bước", "Hiện tại", "Đề xuất", "Tham số dòng lệnh", "Vì sao", "Ảnh hưởng chính", "Chi phí thêm"]
@@ -296,10 +296,14 @@ def table_order():
             ax.text(3.68, 0.95, tr("tiếng ho"), ha="center", va="top", fontsize=6.8, color=RED)
         return f
     rows = [
-        dict(name="pad → drop → merge", param="--order pdm (pad 100/120, drop 0.5 sau pad)", tag="hiện tại", cost="O(số đoạn)",
-             how="Nới đoạn, bỏ đoạn ngắn (độ dài đã gồm pad), rồi gộp khoảng lặng ngắn.", pros=["Như code hiện tại của lib.so."],
-             cons=["Mẩu speech ngắn bị drop trước khi kịp gộp → mất cả câu hát/rap ngắt quãng.",
+        dict(name="pad → drop → merge, drop 0.32 s", param="--order pdm --drop 0.32 (pad 100/120)", tag="hiện tại", cost="O(số đoạn)",
+             how="Nới đoạn, bỏ đoạn ngắn hơn 0.32 s (độ dài đã gồm pad 0.22 s), rồi gộp khoảng lặng ngắn.", pros=["Như code hiện tại của lib.so; câu bị vỡ vẫn được giữ."],
+             cons=["Pad làm mẩu 0.16 s thành 0.38 s → drop chỉ bỏ được đoạn gốc < 0.10 s: tiếng ho vẫn thành speech.",
                    "Ngưỡng drop phụ thuộc pad: đổi pad là phải đổi drop."],
+             mini=mini_o(postprocess_segs(segs, 0.10, 0.12, 0.5, 0.32, 4.6, "pdm"), ORANGE)),
+        dict(name="pad → drop → merge, drop 0.5 s", param="--order pdm --drop 0.5 (pad 100/120)", tag="tránh", cost="O(số đoạn)",
+             how="Tăng drop để bỏ được tiếng ho khi vẫn giữ thứ tự hiện tại.", pros=["Bỏ được tiếng ho mà không cần sửa thứ tự trong lib."],
+             cons=["Mẩu speech ngắn bị drop trước khi kịp gộp → mất cả câu hát/rap ngắt quãng."],
              mini=mini_o(postprocess_segs(segs, 0.10, 0.12, 0.5, 0.5, 4.6, "pdm"), ORANGE)),
         dict(name="merge → drop → pad", param="--order mdp (drop 0.32 trước pad, pad 0)", tag="đề xuất", cost="O(số đoạn)",
              how="Gộp khoảng lặng ngắn trên đoạn chưa pad, bỏ đoạn ngắn (đo trước pad), rồi pad.",
@@ -334,22 +338,23 @@ def table_merge():
 def table_drop():
     def mk(d, order="mdp", pre=0.0, post=0.0): s, pb = pipeline(order=order, pre=pre, post=post, drop=d); return lambda ax: mini_bars(ax, s, ORANGE, pb=pb)
     rows = [
-        dict(name="Không drop", param="--drop 0", tag="hiện tại", cost="0", how="Giữ mọi đoạn, kể cả rất ngắn.",
+        dict(name="Drop < 0.32 s, đo sau pad", param="--order pdm --drop 0.32 (pad 100/120)", tag="hiện tại", cost="O(số đoạn)",
+             how="Thứ tự hiện tại: pad 100/120 ms trước, rồi bỏ đoạn ngắn hơn 0.32 s (độ dài đã gồm pad 0.22 s).",
+             pros=["Không cần sửa thứ tự trong lib; câu bị vỡ không bị mất."],
+             cons=["Ngưỡng thật trên đoạn gốc chỉ 0.32 − 0.22 = 0.10 s → tiếng ho, gõ vẫn thành speech (file mẫu: tiếng ho còn).",
+                   "Đổi pad là ngưỡng thật đổi theo."], mini=mk(0.32, "pdm", 0.10, 0.12)),
+        dict(name="Không drop", param="--drop 0", tag="tránh", cost="0", how="Giữ mọi đoạn, kể cả rất ngắn.",
              pros=["Không mất từ ngắn thật."], cons=["Tiếng ho, gõ, nốt nhạc thành đoạn speech giả → FAR tăng."], mini=mk(0.0)),
         dict(name="Drop < 0.32 s, đo trước pad", param="--order mdp --drop 0.32", tag="đề xuất", cost="O(số đoạn)",
-             how="Bỏ đoạn ngắn hơn 4 hop (0.32 s), đo trước khi pad.",
-             pros=["Silero 250 ms, SpeechBrain 0.25 s; độc lập với pad."],
+             how="Cùng giá trị 0.32 s nhưng đo trên đoạn chưa pad (4 hop).",
+             pros=["Ngưỡng có nghĩa đúng 0.32 s, độc lập với pad (Silero 250 ms, SpeechBrain 0.25 s)."],
              cons=["Cửa sổ 0.96 s + ngưỡng kép làm gai ngắn nở ra ~0.3–0.5 s: có thể chưa đủ để bỏ (file mẫu: tiếng ho còn)."],
              mini=mk(0.32)),
         dict(name="Drop < 0.4–0.5 s, đo trước pad", param="--order mdp --drop 0.4", tag="thử thêm", cost="O(số đoạn)",
              how="Ngưỡng drop cao hơn để bỏ gai đã bị nở rộng.", pros=["Bỏ được tiếng ho trong file mẫu."],
-             cons=["Bắt đầu xoá từ đơn lẻ, câu trả lời rất ngắn ('ừ', 'vâng') → MR tăng."], mini=mk(0.4)),
-        dict(name="Drop < 0.5 s, đo sau pad", param="--order pdm --drop 0.5", tag="tránh", cost="O(số đoạn)",
-             how="Thứ tự hiện tại: độ dài đã cộng pad 0.22 s.", pros=["Không cần sửa thứ tự trong lib."],
-             cons=["Ngưỡng thật = 0.5 − 0.22 = 0.28 s, đổi theo pad; mẩu speech vỡ bị drop trước khi merge."],
-             mini=mk(0.5, "pdm", 0.10, 0.12))]
+             cons=["Bắt đầu xoá từ đơn lẻ, câu trả lời rất ngắn ('ừ', 'vâng') → MR tăng."], mini=mk(0.4))]
     visual_table("19_so_sanh_drop.png", "Bước 6 – Drop: bỏ đoạn speech quá ngắn",
-                 "Hình nhỏ: toàn pipeline đề xuất (ngưỡng kép, merge → drop → pad 0), chỉ đổi drop; hàng cuối dùng thứ tự hiện tại (pad 100/120). Tiếng ho ở 6.75 s là đoạn cần bỏ; FP / FN theo bin 0.5 s trên file mẫu.",
+                 "Hình nhỏ: toàn pipeline đề xuất (ngưỡng kép, merge → drop → pad 0), chỉ đổi drop; hàng đầu dùng thứ tự hiện tại (pad 100/120 → drop → merge). Tiếng ho ở 6.75 s là đoạn cần bỏ; FP / FN theo bin 0.5 s trên file mẫu.",
                  rows, legend="Tune trong {0, 0.16, 0.24, 0.32, 0.40, 0.50} s, đo trước pad; theo dõi MR của category nhiều câu ngắn.")
 
 def table_pad():

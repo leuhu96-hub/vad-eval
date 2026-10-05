@@ -40,7 +40,7 @@ Regenerate all images: `python docs/make_compare_tables.py --lang en` (Vietnames
 | 3. Threshold | single 0.6026 | double 0.60 / 0.45, tuned on dev | `--hyst 0.15`, `--criterion` | MR, fragment count |
 | 4. Order | pad → drop → merge | merge → drop → pad | `--order mdp` | MR (singing, crowd) |
 | 5. Merge | < 0.5 s | < 0.5 s (tune 0.3–0.8) | `--merge-gap` | FA in pauses |
-| 6. Drop | 0 | 0.32 s before pad (tune 0.32–0.5) | `--drop` | FAR |
+| 6. Drop | 0.32 s after pad | 0.32 s before pad (tune 0.32–0.5) | `--order mdp --drop` | FAR |
 | 7. Pad | 100 / 120 ms | 0 / 0 (tune −0.16…+0.16) | `--pad-pre`, `--pad-post` | FA at edges |
 | 8. Hop | 0.08 s | try 0.16 / 0.24 s | R-h16, R-h24 | CPU ÷2–3, slightly lower AUC |
 
@@ -96,7 +96,8 @@ Compare this step by **F1 / DCF / MR / FAR**; AUC does not depend on the thresho
 
 | Option | Flag | Pros | Cons | Verdict |
 |---|---|---|---|---|
-| pad → drop → merge | `--order pdm` | same as current lib.so | broken speech dropped before merging; drop depends on pad | current |
+| pad → drop → merge, drop 0.32 s | `--order pdm --drop 0.32` | same as current lib.so; broken-up phrases survive | padding turns a 0.16 s spike into 0.38 s → the cough is not dropped; drop depends on pad | current |
+| pad → drop → merge, drop 0.5 s | `--order pdm --drop 0.5` | removes the cough, no lib change | broken speech dropped before merging → whole phrase lost | avoid |
 | merge → drop → pad | `--order mdp` | rejoins broken speech first; drop independent of pad | lib.so order must change | recommended |
 
 ## Step 5 – Merge
@@ -116,10 +117,10 @@ Compare this step by **F1 / DCF / MR / FAR**; AUC does not depend on the thresho
 
 | Option | Flag | Pros | Cons | Verdict |
 |---|---|---|---|---|
-| No drop | `--drop 0` | never loses short words | coughs, knocks, notes become false speech | current |
-| < 0.32 s, before pad | `--order mdp --drop 0.32` | as in Silero / SpeechBrain; independent of pad | widened spikes may survive | recommended |
+| < 0.32 s, after pad | `--order pdm --drop 0.32` | no order change; broken-up phrases survive | effective threshold on the raw segment is only 0.10 s → coughs, knocks still become speech | current |
+| No drop | `--drop 0` | never loses short words | coughs, knocks, notes become false speech | avoid |
+| < 0.32 s, before pad | `--order mdp --drop 0.32` | same value but truly 0.32 s; as in Silero / SpeechBrain; independent of pad | widened spikes may survive | recommended |
 | < 0.4–0.5 s, before pad | `--order mdp --drop 0.4` | removes widened spikes | deletes very short replies ("yeah", "ok") | worth trying |
-| < 0.5 s, after pad | `--order pdm --drop 0.5` | no order change needed | effective threshold moves with pad; drop before merge | avoid |
 
 ## Step 7 – Pad
 

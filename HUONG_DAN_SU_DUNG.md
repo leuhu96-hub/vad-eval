@@ -251,7 +251,7 @@ Cách đọc hình:
 | `--order pdm\|mdp` | pdm | pdm = pad → drop → merge; mdp = merge → drop → pad |
 | `--pad-pre`, `--pad-post` | 0.10, 0.12 | Nới đầu / cuối đoạn (giây); âm = co |
 | `--merge-gap` | 0.50 | Gộp hai đoạn cách nhau < N giây |
-| `--drop` | 0 | Bỏ đoạn ngắn hơn N giây (pdm: đo sau pad; mdp: đo trước pad) |
+| `--drop` | 0.32 | Bỏ đoạn ngắn hơn N giây (pdm: đo sau pad; mdp: đo trước pad). Hiện tại lib.so dùng 0.32 s đo sau pad |
 
 **Chọn ngưỡng và thống kê**
 
@@ -357,10 +357,10 @@ tốt hơn cấu hình hiện tại, và tốt hơn có thật không.
 
 | Mã | Cấu hình |
 |---|---|
-| B0 | Cấu hình hiện tại: tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 ms → drop → merge < 500 ms. Luôn cố định để các lần chạy so được với nhau |
+| B0 | Cấu hình hiện tại: tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 ms → drop < 0.32 s (đo sau pad) → merge < 500 ms. Luôn cố định để các lần chạy so được với nhau |
 | CLI | Tham số dòng lệnh, chỉ hiện khi khác B0 và R |
 | C1 | B0 + ngưỡng kép Δ 0.15 |
-| C2 | B0 + thứ tự merge → drop 0.32 s → pad |
+| C2 | B0 + thứ tự merge → drop → pad (drop 0.32 s, nay đo trước pad) |
 | C3 | B0 + pad 0 / 0 |
 | C4 | B0 + làm mượt median 3 hop |
 | C5 | B0 + không làm mượt |
@@ -377,8 +377,9 @@ vụn; ngưỡng kép chỉ tắt khi điểm xuống dưới ngưỡng − Δ.
 
 ![Ngưỡng kép](docs/img/05_nguong_kep.png)
 
-**C2 – thứ tự merge → drop → pad (`--order mdp`).** Speech bị vỡ thành nhiều mẩu ngắn sát nhau sẽ bị drop từng mẩu
-nếu drop chạy trước merge; merge trước thì các mẩu được ghép lại, còn tiếng ho đứng riêng vẫn bị drop.
+**C2 – thứ tự merge → drop → pad (`--order mdp`).** Với thứ tự hiện tại (pdm), drop đo sau pad: pad 0.22 s làm mỗi mẩu
+0.16 s thành 0.38 s nên drop 0.32 s không bỏ được tiếng ho; tăng drop lên 0.5 s thì bỏ được tiếng ho nhưng các mẩu của
+câu bị vỡ cũng bị drop trước khi kịp merge. Merge trước (mdp) thì câu được ghép lại, còn tiếng ho đứng riêng bị drop.
 
 ![Thứ tự pdm và mdp](docs/img/06_thu_tu_pdm_mdp.png)
 

@@ -39,7 +39,7 @@ Vẽ lại tất cả hình: `python docs/make_compare_tables.py` (bản tiếng
 | 3. Ngưỡng | đơn 0.6026 | kép 0.60 / 0.45, chọn trên dev | `--hyst 0.15`, `--criterion` | MR, số đoạn vụn |
 | 4. Thứ tự | pad → drop → merge | merge → drop → pad | `--order mdp` | MR (hát, đám đông) |
 | 5. Merge | < 0.5 s | < 0.5 s (tune 0.3–0.8) | `--merge-gap` | FA ở khoảng lặng |
-| 6. Drop | 0 | 0.32 s đo trước pad (tune 0.32–0.5) | `--drop` | FAR |
+| 6. Drop | 0.32 s đo sau pad | 0.32 s đo trước pad (tune 0.32–0.5) | `--order mdp --drop` | FAR |
 | 7. Pad | 100 / 120 ms | 0 / 0 (tune −0.16…+0.16) | `--pad-pre`, `--pad-post` | FA ở biên |
 | 8. Hop | 0.08 s | thử 0.16 / 0.24 s | R-h16, R-h24 | CPU ÷2–3, AUC giảm nhẹ |
 
@@ -94,7 +94,8 @@ So bước này bằng **F1 / DCF / MR / FAR**; AUC không đổi theo ngưỡng
 
 | Phương án | Tham số | Ưu | Nhược | Đánh giá |
 |---|---|---|---|---|
-| pad → drop → merge | `--order pdm` | như lib.so hiện tại | mẩu speech vỡ bị drop trước khi gộp; drop phụ thuộc pad | hiện tại |
+| pad → drop → merge, drop 0.32 s | `--order pdm --drop 0.32` | như lib.so hiện tại; câu bị vỡ được giữ | pad làm gai 0.16 s thành 0.38 s → tiếng ho không bị drop; drop phụ thuộc pad | hiện tại |
+| pad → drop → merge, drop 0.5 s | `--order pdm --drop 0.5` | bỏ được tiếng ho, không sửa lib | mẩu speech vỡ bị drop trước khi gộp → mất cả câu | tránh |
 | merge → drop → pad | `--order mdp` | ghép mẩu vỡ trước; drop độc lập với pad | phải sửa thứ tự trong lib.so | đề xuất |
 
 ## Bước 5 – Merge
@@ -114,10 +115,10 @@ So bước này bằng **F1 / DCF / MR / FAR**; AUC không đổi theo ngưỡng
 
 | Phương án | Tham số | Ưu | Nhược | Đánh giá |
 |---|---|---|---|---|
-| Không drop | `--drop 0` | không mất từ ngắn | ho, gõ, nốt nhạc thành speech giả | hiện tại |
-| < 0.32 s, trước pad | `--order mdp --drop 0.32` | như Silero / SpeechBrain; độc lập với pad | gai đã nở rộng có thể còn | đề xuất |
+| < 0.32 s, sau pad | `--order pdm --drop 0.32` | không cần sửa thứ tự; câu bị vỡ không mất | ngưỡng thật trên đoạn gốc chỉ 0.10 s → ho, gõ vẫn thành speech | hiện tại |
+| Không drop | `--drop 0` | không mất từ ngắn | ho, gõ, nốt nhạc thành speech giả | tránh |
+| < 0.32 s, trước pad | `--order mdp --drop 0.32` | cùng giá trị nhưng đúng nghĩa 0.32 s; như Silero / SpeechBrain; độc lập với pad | gai đã nở rộng có thể còn | đề xuất |
 | < 0.4–0.5 s, trước pad | `--order mdp --drop 0.4` | bỏ được gai nở rộng | xoá câu rất ngắn ("ừ", "vâng") | thử thêm |
-| < 0.5 s, sau pad | `--order pdm --drop 0.5` | không cần sửa thứ tự | ngưỡng thật đổi theo pad; drop trước merge | tránh |
 
 ## Bước 7 – Pad
 

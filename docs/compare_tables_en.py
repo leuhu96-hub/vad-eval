@@ -191,4 +191,21 @@ EN = {
     "Tính spectrogram một lần rồi cắt patch 96×64 chồng nhau, thay vì tính lại cho từng cửa sổ.": "Compute the spectrogram once, then slice overlapping 96×64 patches instead of recomputing per window.",
     "YAMNet gốc làm như vậy; không đổi kết quả, chỉ nhanh hơn.": "The original YAMNet does this; same output, just faster.",
     "Cần sửa code lib.so; không đo được trong vad-eval.": "Requires a lib.so code change; cannot be measured in vad-eval.",
+    # ---- cập nhật: drop hiện tại = 0.32 s đo sau pad ----
+    "0.32 s đo sau pad": "0.32 s after pad", "Drop < 0.32 s, đo sau pad": "Drop < 0.32 s, after pad", "đo trước pad mới bỏ được gai ngắn": "measured before pad, it actually removes short spikes",
+    "pad → drop → merge, drop 0.32 s": "pad → drop → merge, drop 0.32 s", "--order pdm --drop 0.32 (pad 100/120)": "--order pdm --drop 0.32 (pad 100/120)",
+    "Nới đoạn, bỏ đoạn ngắn hơn 0.32 s (độ dài đã gồm pad 0.22 s), rồi gộp khoảng lặng ngắn.": "Pad segments, drop those shorter than 0.32 s (length includes 0.22 s of pad), then merge short pauses.",
+    "Như code hiện tại của lib.so; câu bị vỡ vẫn được giữ.": "Same as the current lib.so code; broken-up phrases survive.",
+    "Pad làm mẩu 0.16 s thành 0.38 s → drop chỉ bỏ được đoạn gốc < 0.10 s: tiếng ho vẫn thành speech.": "Padding turns a 0.16 s piece into 0.38 s → drop only removes raw segments < 0.10 s: the cough still becomes speech.",
+    "pad → drop → merge, drop 0.5 s": "pad → drop → merge, drop 0.5 s", "--order pdm --drop 0.5 (pad 100/120)": "--order pdm --drop 0.5 (pad 100/120)",
+    "Tăng drop để bỏ được tiếng ho khi vẫn giữ thứ tự hiện tại.": "Raise drop to remove the cough while keeping the current order.",
+    "Bỏ được tiếng ho mà không cần sửa thứ tự trong lib.": "Removes the cough without changing the lib order.",
+    "Thứ tự hiện tại: pad 100/120 ms trước, rồi bỏ đoạn ngắn hơn 0.32 s (độ dài đã gồm pad 0.22 s).": "Current order: pad 100/120 ms first, then drop segments shorter than 0.32 s (length includes 0.22 s of pad).",
+    "Không cần sửa thứ tự trong lib; câu bị vỡ không bị mất.": "No lib order change; broken-up phrases are not lost.",
+    "Ngưỡng thật trên đoạn gốc chỉ 0.32 − 0.22 = 0.10 s → tiếng ho, gõ vẫn thành speech (file mẫu: tiếng ho còn).": "Effective threshold on the raw segment is only 0.32 − 0.22 = 0.10 s → coughs, knocks still become speech (sample: cough survives).",
+    "Đổi pad là ngưỡng thật đổi theo.": "Changing pad changes the effective threshold.",
+    "Cùng giá trị 0.32 s nhưng đo trên đoạn chưa pad (4 hop).": "Same 0.32 s value, but measured on the unpadded segment (4 hops).",
+    "Ngưỡng có nghĩa đúng 0.32 s, độc lập với pad (Silero 250 ms, SpeechBrain 0.25 s).": "The threshold means exactly 0.32 s, independent of pad (Silero 250 ms, SpeechBrain 0.25 s).",
+    "Hình nhỏ: toàn pipeline đề xuất (ngưỡng kép, merge → drop → pad 0), chỉ đổi drop; hàng đầu dùng thứ tự hiện tại (pad 100/120 → drop → merge). Tiếng ho ở 6.75 s là đoạn cần bỏ; FP / FN theo bin 0.5 s trên file mẫu.":
+        "Mini plots: full recommended pipeline (hysteresis, merge → drop → pad 0), changing only drop; the first row uses the current order (pad 100/120 → drop → merge). The cough at 6.75 s should be removed; FP / FN in 0.5 s bins on the sample.",
 }

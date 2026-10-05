@@ -268,28 +268,31 @@ def fig_order():
     segs = [[1.0, 1.16], [1.4, 1.56], [1.8, 1.96], [2.2, 2.36], [3.6, 3.76]]   # câu hát ngắt quãng + 1 tiếng ho
     pre, post = 0.10, 0.12
     def pad(s): return [[max(0, a - pre), min(dur, b + post)] for a, b in s]
-    p1 = pad(segs); p2 = [x for x in p1 if x[1] - x[0] >= 0.5 - 1e-9]; p3 = postprocess_segs(segs, pre, post, 0.5, 0.5, dur, "pdm")
+    def keep(s, d): return [x for x in s if x[1] - x[0] >= d - 1e-9]
+    p1 = pad(segs)
     m1 = postprocess_segs(segs, 0, 0, 0.5, 0, dur, "mdp"); m2 = postprocess_segs(segs, 0, 0, 0.5, 0.32, dur, "mdp")
-    m3 = postprocess_segs(segs, 0, 0, 0.5, 0.32, dur, "mdp")
-    fig, ax = plt.subplots(1, 2, figsize=(13, 4.3), sharey=True)
-    for a, title, rows, col in (
-            (ax[0], "pdm (hiện tại): pad → drop → merge", [("Đầu vào sau ngưỡng", segs), ("pad 100/120 ms", p1),
-                                                            ("drop < 0.5 s (đo sau pad)", p2), ("merge < 0.5 s", p3)], ORANGE),
-            (ax[1], "mdp (đề xuất): merge → drop → pad", [("Đầu vào sau ngưỡng", segs), ("merge < 0.5 s", m1),
-                                                           ("drop < 0.32 s (đo trước pad)", m2), ("pad 0 / 0", m3)], GREEN)):
+    panels = [("pdm, drop 0.32 (hiện tại)", [("Đầu vào sau ngưỡng", segs), ("pad 100/120 ms", p1), ("drop < 0.32 s (đo sau pad)", keep(p1, 0.32)),
+                                           ("merge < 0.5 s", postprocess_segs(segs, pre, post, 0.5, 0.32, dur, "pdm"))], ORANGE,
+               "pad làm mỗi mẩu 0.16 s thành 0.38 s → tiếng ho không bị drop", RED),
+              ("pdm, drop 0.5 (để bỏ tiếng ho)", [("Đầu vào sau ngưỡng", segs), ("pad 100/120 ms", p1), ("drop < 0.5 s (đo sau pad)", keep(p1, 0.5)),
+                                                ("merge < 0.5 s", postprocess_segs(segs, pre, post, 0.5, 0.5, dur, "pdm"))], ORANGE,
+               "mỗi mẩu bị drop trước khi kịp merge → mất cả câu", RED),
+              ("mdp (đề xuất): merge → drop → pad", [("Đầu vào sau ngưỡng", segs), ("merge < 0.5 s", m1), ("drop < 0.32 s (đo trước pad)", m2),
+                                                   ("pad 0 / 0", m2)], GREEN, "câu giữ nguyên, tiếng ho bị drop", GREEN)]
+    fig, ax = plt.subplots(1, 3, figsize=(16.5, 4.4), sharey=True)
+    for a, (title, rows, col, msg, mcol) in zip(ax, panels):
         for i, (lab, sg) in enumerate(rows):
             y = 4 - i; a.axhline(y, color=GRID, lw=0.6, zorder=0)
             seg_row(a, y, sg, MUTED if i == 0 else col, h=0.5)
-            a.text(0.05, y + 0.36, lab, fontsize=8.8, color=INK)
-        a.set_title(title, loc="left", fontsize=11, fontweight="bold", color=INK)
-        a.set_xlim(0, dur); a.set_ylim(0.4, 4.75); a.set_yticks([]); a.spines["left"].set_visible(False)
+            a.text(0.05, y + 0.36, lab, fontsize=8.6, color=INK)
+        a.set_title(title, loc="left", fontsize=10.8, fontweight="bold", color=INK)
+        a.set_xlim(0, dur); a.set_ylim(0.3, 4.75); a.set_yticks([]); a.spines["left"].set_visible(False)
         a.set_xlabel("thời gian (s)")
         a.axvspan(0.95, 2.4, color=BLUE, alpha=0.06, lw=0); a.text(1.67, 4.6, "câu hát ngắt quãng", ha="center", fontsize=8, color=BLUE)
         a.axvspan(3.55, 3.8, color=RED, alpha=0.06, lw=0); a.text(3.67, 4.6, "tiếng ho", ha="center", fontsize=8, color=RED)
-    ax[0].text(1.67, 0.55, "mỗi mẩu bị drop trước khi kịp merge → mất cả câu", ha="center", fontsize=8.5, color=RED)
-    ax[1].text(1.67, 0.55, "merge trước → câu giữ nguyên; tiếng ho vẫn bị drop", ha="center", fontsize=8.5, color=GREEN)
-    fig.suptitle("Thứ tự các bước quyết định số phận của speech bị vỡ thành nhiều mẩu ngắn (--order)", fontsize=12.5,
-                 fontweight="bold", x=0.02, ha="left", y=1.02)
+        a.text(dur / 2, 0.45, msg, ha="center", fontsize=8.4, color=mcol)
+    fig.suptitle("Thứ tự pad / drop / merge (--order): với pdm, drop đo sau pad nên không thể vừa bỏ tiếng ho vừa giữ câu bị vỡ",
+                 fontsize=12.2, fontweight="bold", x=0.02, ha="left", y=1.02)
     save(fig, "06_thu_tu_pdm_mdp.png")
 
 

@@ -577,7 +577,7 @@ if HAS_PP:
         r = r + 2 + len(top) + 1
     sec(dpp, r, "d. Cách đọc")
     for i, t in enumerate([
-            "B0: cấu hình hiện tại (trọng số tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 ms → drop → merge < 500 ms). C1–C7: B0 + đúng một thay đổi.",
+            "B0: cấu hình hiện tại (trọng số tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 ms → drop < 320 ms đo sau pad → merge < 500 ms). C1–C7: B0 + đúng một thay đổi.",
             "R: cấu hình đề xuất (median 3 hop, ngưỡng kép Δ 0.15, merge < 500 ms → drop < 320 ms đo trước pad → pad 0/0). R-h16 / R-h24: như R nhưng chỉ "
             "giữ 1/2 hoặc 1/3 cửa sổ (mô phỏng hop 0.16 / 0.24 s, giảm số lần chạy model).",
             "T (nếu có --tune): cấu hình tốt nhất trên dev. Lần thử càng nhiều càng dễ khớp riêng dev – tin T khi nó cũng tốt trên test và ở nhiều category.",

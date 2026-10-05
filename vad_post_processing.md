@@ -93,7 +93,7 @@ Any segment whose duration (`end − start`) is **shorter than `min_dur`** is re
 
 - Duration is measured **after padding**: a single 0.08 s frame becomes 0.30 s after padding. To remove isolated frames, `min_dur` must be greater than 0.30 s.
 - Running Drop before Merge carries a risk: an utterance broken into several short pieces may have each piece deleted before it can be merged. If fragmented speech goes missing, consider running Merge first and Drop afterwards.
-- `min_dur` value: **TODO** — fill in from the `lib.so` configuration.
+- Current `lib.so` value: `min_dur = 0.32 s`, measured after padding — i.e. only raw segments shorter than 0.32 − 0.22 = 0.10 s are removed.
 
 ## 5. Merge
 
@@ -115,9 +115,9 @@ Two adjacent segments are joined into one when **the gap between them is less th
 
 ## Example and parameters
 
-The example below walks through a 10 s file: 4 raw segments after thresholding end up as 2 final segments. `min_dur = 0.40 s` is an illustrative value only.
+The example below walks through a 10 s file with the current parameters: 4 raw segments after thresholding end up as 2 final segments.
 
-| Segment | After threshold (s) | After padding (s) | Drop (min_dur 0.40 s) | Merge (gap < 0.5 s) |
+| Segment | After threshold (s) | After padding (s) | Drop (min_dur 0.32 s) | Merge (gap < 0.5 s) |
 | --- | --- | --- | --- | --- |
 | A | 1.20 – 2.40 | 1.10 – 2.52 | keep (1.42 s) | merged with B → 1.10 – 3.72 |
 | B | 2.80 – 3.60 | 2.70 – 3.72 | keep (1.02 s) | gap A–B = 0.18 s → merged |
@@ -134,7 +134,7 @@ The example below walks through a 10 s file: 4 raw segments after thresholding e
 | threshold θ | 0.6026 | Filter threshold | Score ≥ θ is speech |
 | pad_before | 0.10 s | Padding | Extension before each segment |
 | pad_after | 0.12 s | Padding | Extension after each segment |
-| min_dur | TODO | Drop | Shorter segments are removed |
+| min_dur | 0.32 s (after pad) | Drop | Shorter segments are removed |
 | merge_gap | 0.50 s | Merge | Smaller gaps are merged |
 
 **When comparing with the 0.5 s ground truth.** Output segments are rebinned again onto a 0.5 s grid: a bin mostly covered by a speech segment (by overlap or by the bin's midpoint) is labelled speech. Bins sitting right on a speech/non-speech boundary are counted separately as boundary errors, not true errors, because a ±0.25 s offset at a boundary is a limit of the ground-truth resolution, not a model error.

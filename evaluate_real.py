@@ -77,7 +77,7 @@ g.add_argument("--order", choices=list(ORDER_DESC), default="pdm",
 g.add_argument("--pad-pre", type=float, default=0.10, help="nới đầu đoạn speech, giây; âm = co (mặc định %(default)s)")
 g.add_argument("--pad-post", type=float, default=0.12, help="nới cuối đoạn speech, giây; âm = co (mặc định %(default)s)")
 g.add_argument("--merge-gap", type=float, default=0.50, help="gộp hai đoạn cách nhau < N giây (mặc định %(default)s)")
-g.add_argument("--drop", type=float, default=0.0,
+g.add_argument("--drop", type=float, default=0.32,
                help="bỏ đoạn ngắn hơn N giây; pdm: đo sau pad, mdp: đo trước pad; chỉ ở A4 (mặc định %(default)s)")
 g = ap.add_argument_group("so sánh phương án hậu xử lý (mục 6)")
 g.add_argument("--no-compare", action="store_true", help="bỏ mục so sánh các phương án hậu xử lý")
@@ -681,7 +681,7 @@ PP_KEYS = ("overlap", "smooth", "smooth_kind", "domain", "hyst", "order", "pre",
 CLI = dict(overlap=A.overlap, smooth=A.smooth, smooth_kind=A.smooth_kind, domain=A.domain, hyst=A.hyst, order=A.order,
            pre=A.pad_pre, post=A.pad_post, gap=A.merge_gap, drop=A.drop, hop_sub=1)
 BASE = dict(overlap=RESCORE_WEIGHT, smooth=RESCORE_SMOOTH, smooth_kind="mean", domain="prob", hyst=0.0, order="pdm",
-            pre=0.10, post=0.12, gap=0.50, drop=0.0, hop_sub=1)   # B0 luôn là cấu hình hiện tại để các lần chạy so sánh được
+            pre=0.10, post=0.12, gap=0.50, drop=0.32, hop_sub=1)   # B0 luôn là cấu hình hiện tại để các lần chạy so sánh được
 _rec = PRESETS["de-xuat"]
 REC = dict(overlap=_rec["overlap"], smooth=_rec["smooth"], smooth_kind=_rec["smooth_kind"], domain=_rec["domain"], hyst=_rec["hyst"],
            order=_rec["order"], pre=_rec["pad_pre"], post=_rec["pad_post"], gap=_rec["merge_gap"], drop=_rec["drop"], hop_sub=1)
@@ -690,9 +690,9 @@ def cfg_desc(c):
             + (f"ngưỡng kép Δ {c['hyst']:g}" if c["hyst"] > 0 else "ngưỡng đơn")
             + f"; {ORDER_DESC[c['order']]}: pad {ms(c['pre'])}/{ms(c['post'])} ms, merge < {ms(c['gap'])} ms, drop {ms(c['drop'])} ms"
             + (f"; hop {HOP * c['hop_sub']:g} s (giữ 1/{c['hop_sub']} cửa sổ)" if c["hop_sub"] > 1 else ""))
-COMPARE = [("B0", "Hiện tại (pad 100/120, merge 500, mean 5 hop)", BASE),
+COMPARE = [("B0", "Hiện tại (pad 100/120, drop 0.32, merge 500, mean 5 hop)", BASE),
            ("C1", "B0 + ngưỡng kép Δ 0.15", {**BASE, "hyst": 0.15}),
-           ("C2", "B0 + thứ tự merge → drop 0.32 s → pad", {**BASE, "order": "mdp", "drop": 0.32}),
+           ("C2", "B0 + thứ tự merge → drop → pad (drop 0.32 đo trước pad)", {**BASE, "order": "mdp"}),
            ("C3", "B0 + pad 0 / 0", {**BASE, "pre": 0.0, "post": 0.0}),
            ("C4", "B0 + làm mượt median 3 hop", {**BASE, "smooth": 3, "smooth_kind": "median"}),
            ("C5", "B0 + không làm mượt", {**BASE, "smooth": 1}),

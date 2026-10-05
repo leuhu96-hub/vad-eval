@@ -42,7 +42,7 @@ Tinh chỉnh (mặc định = cấu hình hiện tại; giá trị đã dùng đ
 | `--order pdm\|mdp` | pdm | Thứ tự ở A4. pdm = pad → drop → merge (hiện tại). mdp = merge → drop → pad: merge trên đoạn chưa pad, drop đo độ dài trước pad |
 | `--pad-pre`, `--pad-post` | 0.10, 0.12 | Nới đầu / cuối đoạn speech (giây); âm = co đoạn |
 | `--merge-gap` | 0.50 | Gộp hai đoạn cách nhau ít hơn N giây |
-| `--drop` | 0 | Bỏ đoạn ngắn hơn N giây, chỉ ở A4 (pdm: đo sau pad; mdp: đo trước pad) |
+| `--drop` | 0.32 | Bỏ đoạn ngắn hơn N giây, chỉ ở A4 (pdm: đo sau pad; mdp: đo trước pad). Cấu hình hiện tại của lib.so: 0.32 s đo sau pad |
 | `--no-compare` | | Bỏ mục 6 (so sánh phương án hậu xử lý) |
 | `--tune N`, `--tune-seed` | 0, 0 | Tìm cấu hình hậu xử lý tốt nhất trên dev với N lần thử (Optuna TPE nếu đã cài `optuna`, không thì tìm ngẫu nhiên) |
 | `--criterion DCF-min\|F1-max` | DCF-min | Tiêu chí chọn ngưỡng trên dev (Excel lấy làm mặc định ô B8) |
@@ -84,9 +84,9 @@ Cách làm:
 
 | Mã | Cấu hình |
 |---|---|
-| B0 | Cấu hình hiện tại: tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 → drop → merge < 500 ms. Luôn cố định (không theo `--preset`), để các lần chạy so được với nhau |
+| B0 | Cấu hình hiện tại: tam giác + trung bình 5 hop, ngưỡng đơn, pad 100/120 → drop < 0.32 s (đo sau pad) → merge < 500 ms. Luôn cố định (không theo `--preset`), để các lần chạy so được với nhau |
 | CLI | Tham số dòng lệnh, chỉ hiện khi khác B0 và R |
-| C1–C7 | B0 + đúng một thay đổi: ngưỡng kép Δ 0.15 / merge → drop 0.32 s → pad / pad 0/0 / median 3 hop / không làm mượt / Hann / miền logit |
+| C1–C7 | B0 + đúng một thay đổi: ngưỡng kép Δ 0.15 / thứ tự merge → drop → pad (drop 0.32 s đo trước pad) / pad 0/0 / median 3 hop / không làm mượt / Hann / miền logit |
 | R | Đề xuất (`--preset de-xuat`) |
 | R-h16, R-h24 | Như R nhưng chỉ giữ 1/2, 1/3 cửa sổ: mô phỏng hop 0.16 / 0.24 s, giảm 2–3× số lần chạy model (CPU, pin) |
 | T | Có `--tune N`: cấu hình tốt nhất trên dev. N càng lớn càng dễ khớp riêng dev, nên chỉ tin T khi test và các category cũng tốt |
