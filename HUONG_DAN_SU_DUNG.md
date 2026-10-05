@@ -29,6 +29,7 @@ Mục lục
 | `vadlib.py` | Thư viện chung: đọc file, rescore, ngưỡng, hậu xử lý, metric | Được các script trên import; dùng được trong code riêng |
 | `gen_data.py`, `evaluate.py`, `make_excel.py` | Demo trên dữ liệu giả định 10 s | Học quy trình, thử code |
 | `vad_post_processing.md` | Mô tả các bước hậu xử lý (Rebin, threshold, padding, drop, merge) | Tham khảo |
+| `SO_SANH_TOI_UU.md`, `docs/make_compare_tables.py` | Bảng so sánh trực quan các phương án tối ưu từng bước và script vẽ | Khi chọn cấu hình hậu xử lý |
 | `docs/make_figures.py` | Vẽ lại các sơ đồ / hình minh hoạ của tài liệu này vào `docs/img/` | Khi sửa tài liệu hoặc đổi hàm hậu xử lý |
 
 Luồng dữ liệu:
@@ -346,6 +347,8 @@ tiết ở README).
 ---
 
 ## 6. Phần 3 – Tinh chỉnh và so sánh hậu xử lý
+
+> Bảng so sánh trực quan từng bước (ưu, nhược, minh hoạ, đánh giá): [SO_SANH_TOI_UU.md](SO_SANH_TOI_UU.md).
 
 Phần này nằm trong `evaluate_real.py` (mục 6), chạy mặc định. Nó trả lời câu hỏi: đổi bước hậu xử lý nào thì kết quả
 tốt hơn cấu hình hiện tại, và tốt hơn có thật không.
