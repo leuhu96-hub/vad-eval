@@ -1,5 +1,7 @@
 # So sánh các phương án tối ưu hậu xử lý – từng bước
 
+*English: [POSTPROCESSING_COMPARISON.md](POSTPROCESSING_COMPARISON.md)*
+
 Tài liệu này so sánh từng bước hậu xử lý theo dạng bảng. Mỗi bước có hai phần:
 
 - một bảng hình: mỗi phương án một hàng, kèm hình minh hoạ trên **cùng một file mẫu 10 s**;
@@ -22,7 +24,7 @@ tụt (8.6 s). Hình chạy đúng các hàm của `vadlib.py`. Số FP / FN tr�
 | tránh | Thường làm kết quả xấu đi với dữ liệu hiện tại |
 | chưa có | Chưa cài trong vad-eval / lib.so; ghi lại để tham khảo |
 
-Vẽ lại tất cả hình: `python docs/make_compare_tables.py`.
+Vẽ lại tất cả hình: `python docs/make_compare_tables.py` (bản tiếng Anh: thêm `--lang en`).
 
 ---
 

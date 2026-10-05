@@ -71,7 +71,7 @@ Kết quả:
 ## So sánh phương án hậu xử lý (evaluate_real.py mục 6)
 
 Mặc định evaluate_real.py chạy thêm mục này (tắt bằng `--no-compare`). Cơ sở của các phương án:
-[vad_post_processing.md](vad_post_processing.md) và báo cáo tối ưu hậu xử lý. Bảng so sánh từng bước có minh hoạ: [SO_SANH_TOI_UU.md](SO_SANH_TOI_UU.md).
+[vad_post_processing.md](vad_post_processing.md) và báo cáo tối ưu hậu xử lý. Bảng so sánh từng bước có minh hoạ: [SO_SANH_TOI_UU.md](SO_SANH_TOI_UU.md) (English: [POSTPROCESSING_COMPARISON.md](POSTPROCESSING_COMPARISON.md)).
 
     python evaluate_real.py --root <root> --out results_test --tune 300                 # so sánh + tìm cấu hình trên dev
     python evaluate_real.py --root <root> --out results_dexuat --preset de-xuat         # cả báo cáo (A0–A4, Excel) theo cấu hình đề xuất

@@ -2,9 +2,10 @@
 
 Mỗi bảng: mỗi phương án một hàng, có hình minh hoạ nhỏ trên cùng một file mẫu 10 s (tín hiệu tự tạo, chạy đúng các
 hàm của vadlib), cách làm, ưu, nhược, chi phí và đánh giá. Số FP / FN trên hình chỉ đếm trên file mẫu để minh hoạ.
-    python docs/make_compare_tables.py
+    python docs/make_compare_tables.py            # tiếng Việt -> docs/img/13_….png
+    python docs/make_compare_tables.py --lang en  # tiếng Anh  -> docs/img/13_…_en.png (bản dịch: compare_tables_en.py)
 """
-import sys, textwrap
+import re, sys, textwrap
 from pathlib import Path
 import numpy as np, pandas as pd
 import matplotlib; matplotlib.use("Agg")
@@ -17,6 +18,18 @@ from vadlib import (rescore_hop, smooth_scores, hysteresis, frames_to_segs, post
                     HOP, BIN, WIN, HALF_WIN)
 
 DUR = 10.0
+LANG = "en" if "--lang" in sys.argv and sys.argv[sys.argv.index("--lang") + 1] == "en" else "vi"
+_VI = re.compile(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", re.I)
+if LANG == "en":
+    from compare_tables_en import EN
+    MISSING = set()
+
+def tr(t):
+    """Chuỗi hiển thị theo LANG; bản tiếng Anh lấy từ compare_tables_en.EN (thiếu bản dịch -> báo lỗi khi chạy xong)."""
+    if LANG == "vi" or not isinstance(t, str): return t
+    if t in EN: return EN[t]
+    if _VI.search(t): MISSING.add(t)
+    return t
 TAG = {"hiện tại": ("#52514e", "#ecebe7"), "đề xuất": ("#0d7a52", "#dcf3e9"), "thử thêm": ("#8a6a00", "#fbf0d2"),
        "tránh": ("#b42f2e", "#fbe1e0"), "chưa có": ("#4a3aa7", "#e8e5f6")}
 
@@ -72,11 +85,11 @@ def mini_bars(ax, segs, color=GREEN, show_counts=True, pb=None, extra=""):
     mini_frame(ax); ax.set_ylim(0, 1)
     for a, b in SP: ax.add_patch(Rectangle((a, 0.62), b - a, 0.26, fc=BLUE, alpha=0.75, ec="none"))
     for a, b in segs: ax.add_patch(Rectangle((a, 0.18), b - a, 0.26, fc=color, alpha=0.85, ec="none"))
-    ax.text(-0.1, 0.75, "nhãn", ha="right", va="center", fontsize=6.8, color=INK2)
-    ax.text(-0.1, 0.31, "ra", ha="right", va="center", fontsize=6.8, color=INK2)
+    ax.text(-0.1, 0.75, tr("nhãn"), ha="right", va="center", fontsize=6.8, color=INK2)
+    ax.text(-0.1, 0.31, tr("ra"), ha="right", va="center", fontsize=6.8, color=INK2)
     if show_counts:
         fp, fn = counts(pb if pb is not None else segs_to_bins_fast(segs, len(GT)))
-        ax.text(DUR, 0.02, f"{len(segs)} đoạn · FP {fp} bin · FN {fn} bin{extra}", ha="right", va="bottom", fontsize=7, color=INK2)
+        ax.text(DUR, 0.02, tr("{n} đoạn · FP {fp} bin · FN {fn} bin").format(n=len(segs), fp=fp, fn=fn) + extra, ha="right", va="bottom", fontsize=7, color=INK2)
 
 
 # ---------------- khung bảng ----------------
@@ -86,6 +99,7 @@ HEAD = ["Phương án", "Minh hoạ trên file mẫu", "Cách làm · ưu (+) ·
 def wrap(t, n): return "\n".join(textwrap.wrap(t, n, break_long_words=False))
 
 def visual_table(fname, title, subtitle, rows, legend=None, row_h=1.3):
+    title, subtitle, legend = tr(title), tr(subtitle), tr(legend)
     W = sum(COLW) + 0.3; H = 1.25 + 0.42 + row_h * len(rows) + (0.45 if legend else 0.2)
     fig = plt.figure(figsize=(W, H)); X = np.r_[0.15, 0.15 + np.cumsum(COLW)]
     def fx(x): return x / W
@@ -95,7 +109,7 @@ def visual_table(fname, title, subtitle, rows, legend=None, row_h=1.3):
     bg = fig.add_axes([0, 0, 1, 1], zorder=-1); bg.axis("off"); bg.set_xlim(0, W); bg.set_ylim(H, 0)
     y0 = 1.25
     bg.add_patch(Rectangle((X[0], y0), X[-1] - X[0], 0.42, fc="#1f4e78", ec="none"))
-    for j, h in enumerate(HEAD): bg.text(X[j] + 0.1, y0 + 0.21, h, color="white", fontsize=9.5, fontweight="bold", va="center")
+    for j, h in enumerate(HEAD): bg.text(X[j] + 0.1, y0 + 0.21, tr(h), color="white", fontsize=9.5, fontweight="bold", va="center")
     for i, r in enumerate(rows):
         top = y0 + 0.42 + i * row_h; fg, fill = TAG[r["tag"]]
         bg.add_patch(Rectangle((X[0], top), X[-1] - X[0], row_h, fc=TINT if i % 2 else "white", ec="none"))
@@ -103,20 +117,20 @@ def visual_table(fname, title, subtitle, rows, legend=None, row_h=1.3):
             bg.add_patch(Rectangle((X[0] + 0.01, top + 0.03), X[-1] - X[0] - 0.02, row_h - 0.06, fc="none", ec=fg, lw=1.6 if r["tag"] == "đề xuất" else 1.0,
                                    ls="-" if r["tag"] == "đề xuất" else "--"))
         bg.plot([X[0], X[-1]], [top + row_h] * 2, color=GRID, lw=0.8)
-        bg.text(X[0] + 0.12, top + 0.33, wrap(r["name"], 24), fontsize=9.6, fontweight="bold", color=INK, va="center")
-        if r.get("param"): bg.text(X[0] + 0.12, top + row_h - 0.3, wrap(r["param"], 30), fontsize=7.8, color=PURPLE, va="center")
-        lines = [("", r["how"], INK)] + [("+ ", p, "#0d7a52") for p in r.get("pros", [])] + [("− ", c, "#b42f2e") for c in r.get("cons", [])]
+        bg.text(X[0] + 0.12, top + 0.33, wrap(tr(r["name"]), 24), fontsize=9.6, fontweight="bold", color=INK, va="center")
+        if r.get("param"): bg.text(X[0] + 0.12, top + row_h - 0.3, wrap(tr(r["param"]), 30), fontsize=7.8, color=PURPLE, va="center")
+        lines = [("", tr(r["how"]), INK)] + [("+ ", tr(p), "#0d7a52") for p in r.get("pros", [])] + [("− ", tr(c), "#b42f2e") for c in r.get("cons", [])]
         yy = top + 0.16
         for pre, t, col in lines:
             txt = wrap(pre + t, 86); bg.text(X[2] + 0.1, yy, txt, fontsize=8.1, color=col, va="top"); yy += 0.165 * (txt.count("\n") + 1) + 0.02
-        bg.text(X[3] + 0.1, top + row_h / 2, wrap(r["cost"], 14), fontsize=8, color=INK2, va="center")
+        bg.text(X[3] + 0.1, top + row_h / 2, wrap(tr(r["cost"]), 14), fontsize=8, color=INK2, va="center")
         bg.add_patch(FancyBboxPatch((X[4] + 0.12, top + row_h / 2 - 0.16), COLW[4] - 0.3, 0.32, boxstyle="round,pad=0,rounding_size=0.08",
                                     fc=fill, ec=fg, lw=1))
-        bg.text(X[4] + 0.12 + (COLW[4] - 0.3) / 2, top + row_h / 2, r["tag"], fontsize=8.6, fontweight="bold", color=fg, ha="center", va="center")
+        bg.text(X[4] + 0.12 + (COLW[4] - 0.3) / 2, top + row_h / 2, tr(r["tag"]), fontsize=8.6 if len(tr(r["tag"])) <= 9 else 7.4, fontweight="bold", color=fg, ha="center", va="center")
         ax = fig.add_axes([fx(X[1] + 0.15), fy(top + row_h - 0.1), fx(COLW[1] - 0.3), (row_h - 0.2) / H])
         ax.set_facecolor("none"); r["mini"](ax)
     if legend: fig.text(fx(0.15), fy(H - 0.22), legend, fontsize=8.2, color=INK2, va="center")
-    save(fig, fname)
+    save_lang(fig, fname)
 
 
 # ======================= bảng tổng quan =======================
@@ -133,17 +147,17 @@ def table_overview():
     cw = [2.1, 1.85, 2.6, 2.75, 3.6, 1.7, 1.3]; W = sum(cw) + 0.3; rh = 0.52; H = 1.2 + 0.45 + rh * len(rows) + 0.75
     fig = plt.figure(figsize=(W, H)); ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off"); ax.set_xlim(0, W); ax.set_ylim(H, 0)
     X = np.r_[0.15, 0.15 + np.cumsum(cw)]
-    ax.text(0.15, 0.4, "Tổng quan: hậu xử lý hiện tại → cấu hình đề xuất (--preset de-xuat)", fontsize=14, fontweight="bold")
-    ax.text(0.15, 0.8, "Mỗi bước một hàng. Đề xuất là điểm khởi đầu; giá trị cuối cùng chọn bằng so sánh (mục 6) và --tune trên dev của dữ liệu thật.",
+    ax.text(0.15, 0.4, tr("Tổng quan: hậu xử lý hiện tại → cấu hình đề xuất (--preset de-xuat)"), fontsize=14, fontweight="bold")
+    ax.text(0.15, 0.8, tr("Mỗi bước một hàng. Đề xuất là điểm khởi đầu; giá trị cuối cùng chọn bằng so sánh (mục 6) và --tune trên dev của dữ liệu thật."),
             fontsize=9, color=INK2)
     y0 = 1.2; ax.add_patch(Rectangle((X[0], y0), X[-1] - X[0], 0.45, fc="#1f4e78", ec="none"))
-    for j, c in enumerate(cols): ax.text(X[j] + 0.1, y0 + 0.225, c, color="white", fontsize=9.5, fontweight="bold", va="center")
+    for j, c in enumerate(cols): ax.text(X[j] + 0.1, y0 + 0.225, tr(c), color="white", fontsize=9.5, fontweight="bold", va="center")
     for i, r in enumerate(rows):
         top = y0 + 0.45 + i * rh
         ax.add_patch(Rectangle((X[0], top), X[-1] - X[0], rh, fc=TINT if i % 2 else "white", ec="none"))
         ax.plot([X[0], X[-1]], [top + rh] * 2, color=GRID, lw=0.8)
         for j, v in enumerate(r):
-            kw = dict(fontsize=8.8, va="center", color=INK)
+            v = tr(v); kw = dict(fontsize=8.8, va="center", color=INK)
             if j == 0: kw.update(fontweight="bold")
             if j == 1: kw.update(color=INK2)
             if j == 2: kw.update(color="#0d7a52", fontweight="bold")
@@ -151,9 +165,9 @@ def table_overview():
             if j == 6: kw.update(color=ORANGE if "CPU" in v else INK2)
             ax.text(X[j] + 0.1, top + rh / 2, wrap(v, int(cw[j] * 12.5)), **kw)
         if r[1] != r[2]: ax.text(X[2] - 0.02, top + rh / 2, "→", fontsize=11, color="#0d7a52", ha="right", va="center")
-    ax.text(0.15, H - 0.45, "Hậu xử lý chỉ tốn vài mili-giây cho cả giờ audio (một lượt O(N)); chi phí thật nằm ở số lần chạy model, tức hop cửa sổ.",
+    ax.text(0.15, H - 0.45, tr("Hậu xử lý chỉ tốn vài mili-giây cho cả giờ audio (một lượt O(N)); chi phí thật nằm ở số lần chạy model, tức hop cửa sổ."),
             fontsize=8.6, color=INK2)
-    save(fig, "13_bang_tong_quan_toi_uu.png")
+    save_lang(fig, "13_bang_tong_quan_toi_uu.png")
 
 
 # ======================= bước 1: gộp cửa sổ =======================
@@ -234,7 +248,7 @@ def mini_mask(ax, fr, mask, thr=0.6, thr2=None):
     if thr2 is not None: ax.axhline(thr2, color=INK2, lw=0.6, ls=":")
     segs = frames_to_segs(mask, HOP)
     for a, b in segs: ax.add_patch(Rectangle((a, -0.28), b - a, 0.17, fc=PURPLE, alpha=0.85, ec="none"))
-    ax.text(DUR, 1.02, f"{len(segs)} đoạn", ha="right", va="top", fontsize=7, color=INK2)
+    ax.text(DUR, 1.02, tr("{n} đoạn").format(n=len(segs)), ha="right", va="top", fontsize=7, color=INK2)
 
 def table_threshold():
     fr = FR_REC
@@ -275,11 +289,11 @@ def table_order():
             for s_ in ax.spines.values(): s_.set_visible(False)
             for a, b in segs: ax.add_patch(Rectangle((a, 0.62), b - a, 0.26, fc=MUTED, alpha=0.8, ec="none"))
             for a, b in out: ax.add_patch(Rectangle((a, 0.18), b - a, 0.26, fc=col, alpha=0.85, ec="none"))
-            if not out: ax.text(2.4, 0.31, "không còn đoạn nào → mất cả câu", ha="center", va="center", fontsize=7.6, color=RED)
-            ax.text(0.58, 0.75, "vào", ha="right", va="center", fontsize=6.8, color=INK2)
-            ax.text(0.58, 0.31, "ra", ha="right", va="center", fontsize=6.8, color=INK2)
-            ax.text(1.68, 0.95, "câu hát ngắt quãng", ha="center", va="top", fontsize=6.8, color=BLUE)
-            ax.text(3.68, 0.95, "tiếng ho", ha="center", va="top", fontsize=6.8, color=RED)
+            if not out: ax.text(2.4, 0.31, tr("không còn đoạn nào → mất cả câu"), ha="center", va="center", fontsize=7.6, color=RED)
+            ax.text(0.58, 0.75, tr("vào"), ha="right", va="center", fontsize=6.8, color=INK2)
+            ax.text(0.58, 0.31, tr("ra"), ha="right", va="center", fontsize=6.8, color=INK2)
+            ax.text(1.68, 0.95, tr("câu hát ngắt quãng"), ha="center", va="top", fontsize=6.8, color=BLUE)
+            ax.text(3.68, 0.95, tr("tiếng ho"), ha="center", va="top", fontsize=6.8, color=RED)
         return f
     rows = [
         dict(name="pad → drop → merge", param="--order pdm (pad 100/120, drop 0.5 sau pad)", tag="hiện tại", cost="O(số đoạn)",
@@ -368,7 +382,7 @@ def table_hop():
             st = M.start.to_numpy()[::k]
             for x in st[: int(3.0 / (HOP * k))]: ax.plot([x + HALF_WIN], [0.02], "|", color=ORANGE, ms=5)
             fp, fn = counts(pb)
-            ax.text(DUR, 0.02, f"{len(st)} lần chạy / 10 s · FP {fp} · FN {fn}", ha="right", va="bottom", fontsize=7, color=INK2)
+            ax.text(DUR, 0.02, tr("{n} lần chạy / 10 s · FP {fp} · FN {fn}").format(n=len(st), fp=fp, fn=fn), ha="right", va="bottom", fontsize=7, color=INK2)
         return f
     rows = [
         dict(name="Hop 0.08 s", param="R (lib.so hiện tại)", tag="hiện tại", cost="12.5 lần chạy model / giây audio",
@@ -382,12 +396,18 @@ def table_hop():
         dict(name="Tính log-mel một lần cho cả file", param="(thay đổi trong lib.so)", tag="chưa có", cost="giảm phần tính STFT trùng lặp",
              how="Tính spectrogram một lần rồi cắt patch 96×64 chồng nhau, thay vì tính lại cho từng cửa sổ.",
              pros=["YAMNet gốc làm như vậy; không đổi kết quả, chỉ nhanh hơn."], cons=["Cần sửa code lib.so; không đo được trong vad-eval."],
-             mini=lambda ax: (mini_frame(ax), ax.text(5, 0.5, "không đổi kết quả,\nchỉ đổi tốc độ", ha="center", va="center", fontsize=8.5, color=INK2)))]
+             mini=lambda ax: (mini_frame(ax), ax.text(5, 0.5, tr("không đổi kết quả,\nchỉ đổi tốc độ"), ha="center", va="center", fontsize=8.5, color=INK2)))]
     visual_table("21_so_sanh_hop.png", "Bước 8 – Hop cửa sổ: đổi chất lượng lấy hiệu năng",
                  "Hình nhỏ: điểm mỗi hop sau Rebin khi chỉ giữ một phần cửa sổ (nét đứt xám = hop 0.08 s), vạch cam = vị trí các lần chạy model (3 s đầu).",
                  rows, legend="Chọn hop lớn nhất mà F1 giảm không quá ~0.5 điểm so với R trên dữ liệu thật; đo lại runtime / CPU / pin trên thiết bị.")
 
 
+def save_lang(fig, name):
+    save(fig, name if LANG == "vi" else name.replace(".png", "_en.png"))
+
+
 if __name__ == "__main__":
     for f in (table_overview, table_aggregation, table_smoothing, table_threshold, table_order, table_merge, table_drop, table_pad, table_hop):
         f()
+    if LANG == "en" and MISSING:
+        raise SystemExit("Thiếu bản dịch trong compare_tables_en.py:\n" + "\n".join(sorted(MISSING)))
